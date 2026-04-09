@@ -43,6 +43,17 @@
                 </div>
             </div>
             <div class="container-fluid">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible" role="alert" style="margin-bottom:12px;border:2px solid #161616;border-radius:0;box-shadow:2px 2px 0 rgba(0,0,0,.2);">
+                      {{ message }}
+                      <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
                 <div class="row">
                     <div class="col-12 col-sm-6 col-lg-3 mb-4">
                         <div class="card bg-primary p-20 h-100">
@@ -118,6 +129,99 @@
                                 <div class="media-body media-text-right">
                                     <h2 class="text-white">{{ total_volume }}</h2>
                                     <p class="m-b-0 text-white">TOTAL VOLUME (SHARES)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-4">
+                    <div class="col-12 col-sm-6 col-lg-3 mb-4">
+                        <div class="card bg-success p-20 h-100">
+                            <div class="media widget-ten">
+                                <div class="media-left meida media-middle">
+                                    <span><i class="ti-files f-s-40"></i></span>
+                                </div>
+                                <div class="media-body media-text-right">
+                                    <h2 class="text-white">{{ invoice_count }}</h2>
+                                    <p class="m-b-0 text-white">INVOICES</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg-3 mb-4">
+                        <div class="card bg-primary p-20 h-100">
+                            <div class="media widget-ten">
+                                <div class="media-left meida media-middle">
+                                    <span><i class="ti-agenda f-s-40"></i></span>
+                                </div>
+                                <div class="media-body media-text-right">
+                                    <h2 class="text-white">{{ report_count }}</h2>
+                                    <p class="m-b-0 text-white">REPORT SNAPSHOTS</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg-3 mb-4">
+                        <div class="card bg-warning p-20 h-100">
+                            <div class="media widget-ten">
+                                <div class="media-left meida media-middle">
+                                    <span><i class="ti-bell f-s-40"></i></span>
+                                </div>
+                                <div class="media-body media-text-right">
+                                    <h2 class="text-white">{{ notification_count }}</h2>
+                                    <p class="m-b-0 text-white">NOTIFICATIONS</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg-3 mb-4">
+                        <div class="card bg-danger p-20 h-100">
+                            <div class="media widget-ten">
+                                <div class="media-left meida media-middle">
+                                    <span><i class="ti-timer f-s-40"></i></span>
+                                </div>
+                                <div class="media-body media-text-right">
+                                    <h2 class="text-white">{{ uptime_seconds }}</h2>
+                                    <p class="m-b-0 text-white">UPTIME (SEC)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg-4 mb-4">
+                        <div class="card bg-primary p-20 h-100">
+                            <div class="media widget-ten">
+                                <div class="media-left meida media-middle">
+                                    <span><i class="ti-pulse f-s-40"></i></span>
+                                </div>
+                                <div class="media-body media-text-right">
+                                    <h2 class="text-white">{{ total_requests }}</h2>
+                                    <p class="m-b-0 text-white">TOTAL REQUESTS</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg-4 mb-4">
+                        <div class="card bg-success p-20 h-100">
+                            <div class="media widget-ten">
+                                <div class="media-left meida media-middle">
+                                    <span><i class="ti-timer f-s-40"></i></span>
+                                </div>
+                                <div class="media-body media-text-right">
+                                    <h2 class="text-white">{{ '%.2f'|format(avg_latency_ms) }}</h2>
+                                    <p class="m-b-0 text-white">AVG LATENCY (MS)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg-4 mb-4">
+                        <div class="card bg-danger p-20 h-100">
+                            <div class="media widget-ten">
+                                <div class="media-left meida media-middle">
+                                    <span><i class="ti-alert f-s-40"></i></span>
+                                </div>
+                                <div class="media-body media-text-right">
+                                    <h2 class="text-white">{{ total_errors }}</h2>
+                                    <p class="m-b-0 text-white">SERVER ERRORS</p>
                                 </div>
                             </div>
                         </div>
@@ -267,6 +371,127 @@
                         </div>
                     </div>
                 </div>
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card h-100">
+                            <div class="card-title">
+                                <h4>Monitoring Logs (Latest)</h4>
+                            </div>
+                            <div class="card-body table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Log Entry</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for log_line in recent_logs %}
+                                        <tr>
+                                            <td><code>{{ log_line }}</code></td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td>No log entries available yet.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== DATASET MANAGEMENT ===== -->
+                <div class="row mb-4">
+                    <div class="col-12 col-lg-5 mb-4">
+                        <div class="card h-100">
+                            <div class="card-title" style="display:flex;align-items:center;gap:10px;">
+                                <span class="ti-upload" style="font-size:1.3rem;"></span>
+                                <h4 style="margin:0;">Upload Dataset</h4>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ url_for('admin_upload_dataset') }}" enctype="multipart/form-data">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="form-group">
+                                        <label for="dataset_file" style="font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;">CSV File</label>
+                                        <div class="dataset-upload-zone" id="dataset-upload-zone">
+                                            <input type="file" name="dataset_file" id="dataset_file" accept=".csv" required style="display:none;">
+                                            <label for="dataset_file" class="dataset-upload-label" id="dataset-upload-label">
+                                                <i class="ti-cloud-up" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
+                                                <span id="dataset-file-name">Click or drag a .csv file here</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted" style="display:block;margin-bottom:14px;">
+                                        Upload a stock CSV (e.g. <code>AAPL.csv</code>) produced by yfinance or Alpha&nbsp;Vantage.
+                                        Overwrites existing file with same name.
+                                    </small>
+                                    <button type="submit" class="btn btn-primary btn-block" style="font-weight:700;text-transform:uppercase;letter-spacing:.06em;">
+                                        <i class="ti-upload"></i> Upload Dataset
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-7 mb-4">
+                        <div class="card h-100">
+                            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <span class="ti-server" style="font-size:1.3rem;"></span>
+                                    <h4 style="margin:0;">Dataset Files <span class="badge badge-secondary" style="font-size:.7rem;">{{ datasets|length }}</span></h4>
+                                </div>
+                                <small class="text-muted" style="font-size:.78rem;">CSVs in app root</small>
+                            </div>
+                            <div class="card-body table-responsive" style="padding-top:0;">
+                                <table class="table table-hover" id="dataset-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Filename</th>
+                                            <th>Size</th>
+                                            <th>Last Modified</th>
+                                            <th style="width:90px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ds in datasets %}
+                                        <tr>
+                                            <td>
+                                                <i class="ti-file" style="color:#4B73B1;margin-right:5px;"></i>
+                                                <code>{{ ds.name }}</code>
+                                            </td>
+                                            <td>{{ ds.size_kb }}&nbsp;KB</td>
+                                            <td style="font-size:.82rem;color:#666;">{{ ds.modified }}</td>
+                                            <td>
+                                                <form method="POST" action="{{ url_for('admin_delete_dataset') }}"
+                                                      onsubmit="return confirm('Delete {{ ds.name }}?');">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <input type="hidden" name="filename" value="{{ ds.name }}">
+                                                    <button type="submit" class="btn btn-sm btn-danger"
+                                                            style="font-size:.75rem;padding:3px 9px;border-radius:0;border:2px solid #161616;box-shadow:1px 1px 0 rgba(0,0,0,.2);">
+                                                        <i class="ti-trash"></i> Del
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="4" class="text-center" style="color:#999;font-style:italic;">No CSV datasets found in app root.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                                <!-- Quick filter -->
+                                <div style="margin-top:6px;">
+                                    <input type="text" id="dataset-filter" class="form-control form-control-sm"
+                                           placeholder="Filter by filename…"
+                                           style="border:2px solid #161616;border-radius:0;max-width:260px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- ===== END DATASET MANAGEMENT ===== -->
+
             </div>
         </div>
     </div>
@@ -277,6 +502,76 @@
     <script src="{{url_for('static', filename='sidebarmenu.js')}}"></script>
     <script src="{{url_for('static', filename='sticky-kit.min.js')}}"></script>
     <script src="{{url_for('static', filename='custom.min.js')}}"></script>
+
+    <style>
+      /* ---- Dataset Upload Zone ---- */
+      .dataset-upload-zone {
+        border: 2px dashed #161616;
+        background: #fdfdf8;
+        padding: 24px 16px;
+        text-align: center;
+        cursor: pointer;
+        transition: background .15s, border-color .15s;
+        margin-bottom: 10px;
+      }
+      .dataset-upload-zone.drag-over {
+        background: #e8f0fe;
+        border-color: #4B73B1;
+      }
+      .dataset-upload-label {
+        cursor: pointer;
+        display: block;
+        color: #666;
+        font-size: .88rem;
+        margin: 0;
+      }
+      .dataset-upload-label i {
+        color: #4B73B1;
+      }
+    </style>
+
+    <script>
+      // ---- File input label update ----
+      document.getElementById('dataset_file').addEventListener('change', function() {
+        var name = this.files[0] ? this.files[0].name : 'Click or drag a .csv file here';
+        document.getElementById('dataset-file-name').textContent = name;
+      });
+
+      // ---- Drag-and-drop highlight ----
+      (function() {
+        var zone = document.getElementById('dataset-upload-zone');
+        if (!zone) return;
+        ['dragenter','dragover'].forEach(function(evt) {
+          zone.addEventListener(evt, function(e) { e.preventDefault(); zone.classList.add('drag-over'); });
+        });
+        ['dragleave','drop'].forEach(function(evt) {
+          zone.addEventListener(evt, function(e) { e.preventDefault(); zone.classList.remove('drag-over'); });
+        });
+        zone.addEventListener('drop', function(e) {
+          var file = e.dataTransfer.files[0];
+          if (file) {
+            var input = document.getElementById('dataset_file');
+            // DataTransfer trick to assign file to input
+            try {
+              var dt = new DataTransfer();
+              dt.items.add(file);
+              input.files = dt.files;
+            } catch(err) {}
+            document.getElementById('dataset-file-name').textContent = file.name;
+          }
+        });
+      })();
+
+      // ---- Quick filter ----
+      document.getElementById('dataset-filter').addEventListener('input', function() {
+        var val = this.value.toLowerCase();
+        var rows = document.querySelectorAll('#dataset-table tbody tr');
+        rows.forEach(function(row) {
+          var text = row.textContent.toLowerCase();
+          row.style.display = val === '' || text.includes(val) ? '' : 'none';
+        });
+      });
+    </script>
 </body>
 
 </html>

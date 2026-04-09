@@ -77,6 +77,18 @@
                 <h3 class="text-primary">{{quote}} overview</h3>
                 <small class="text-muted">Realtime snapshot, model forecasts, and recent sentiment in one calm
                     view.</small>
+                <!-- Catalyst badge -->
+                <div style="margin-top:8px;">
+                  {% if prediction_mode == 'volume' %}
+                  <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:#161616;color:#fff;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:2px solid #161616;box-shadow:2px 2px 0 rgba(0,0,0,.25);">
+                    <i class="ti-bar-chart"></i> Volume-Based Prediction
+                  </span>
+                  {% else %}
+                  <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:#4B73B1;color:#fff;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:2px solid #161616;box-shadow:2px 2px 0 rgba(0,0,0,.25);">
+                    <i class="ti-line-double"></i> Close-Price Prediction
+                  </span>
+                  {% endif %}
+                </div>
             </div>
             <div class="col-md-7 align-self-center">
             </div>

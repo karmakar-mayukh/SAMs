@@ -5,7 +5,7 @@ Created on Fri Sep 27 14:36:49 2019
 @author: Kaushik
 """
 #**************** IMPORT PACKAGES ********************
-from flask import Flask, render_template, request, flash, redirect, url_for, session, abort
+from flask import Flask, render_template, request, flash, redirect, url_for, session, abort, Response, g
 from alpha_vantage.timeseries import TimeSeries
 import pandas as pd
 import numpy as np
@@ -31,6 +31,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from decimal import Decimal
 from functools import wraps
 import secrets
+from collections import deque
+from logging.handlers import RotatingFileHandler
+import logging
+import time
+from pathlib import Path
 
 # Ignore Warnings
 import warnings
@@ -46,6 +51,30 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 db = SQLAlchemy(app)
+APP_START_TIME = datetime.utcnow()
+REQUEST_METRICS = {
+    'total_requests': 0,
+    'total_errors': 0,
+    'latency_ms': deque(maxlen=1000),
+}
+
+
+def configure_app_logging(flask_app):
+    logs_dir = Path(flask_app.root_path) / 'logs'
+    logs_dir.mkdir(exist_ok=True)
+    log_path = logs_dir / 'app.log'
+    file_handler = RotatingFileHandler(log_path, maxBytes=2_000_000, backupCount=3, encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    file_handler.setFormatter(formatter)
+    if not any(isinstance(h, RotatingFileHandler) for h in flask_app.logger.handlers):
+        flask_app.logger.addHandler(file_handler)
+    flask_app.logger.setLevel(logging.INFO)
+    flask_app.logger.propagate = False
+
+
+configure_app_logging(app)
+LOG_FILE_PATH = Path(app.root_path) / 'logs' / 'app.log'
 
 
 class User(db.Model):
@@ -117,6 +146,57 @@ class Dividend(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     portfolio_item = db.relationship('PortfolioItem', backref=db.backref('dividends', lazy=True))
 
+class NotificationPreference(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, unique=True)
+    in_app_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    trade_notifications = db.Column(db.Boolean, nullable=False, default=True)
+    report_notifications = db.Column(db.Boolean, nullable=False, default=True)
+    invoice_notifications = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('notification_preference', uselist=False))
+
+
+class UserNotification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    category = db.Column(db.String(32), nullable=False, default='system')
+    title = db.Column(db.String(128), nullable=False)
+    message = db.Column(db.String(255), nullable=False)
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('notifications', lazy=True))
+
+
+class ReportSnapshot(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    period_days = db.Column(db.Integer, nullable=False, default=30)
+    total_buys = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    total_sells = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    total_dividends = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    total_commissions = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    net_cashflow = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('report_snapshots', lazy=True))
+
+
+class Invoice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_number = db.Column(db.String(64), nullable=False, unique=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=False, unique=True)
+    transaction_type = db.Column(db.String(16), nullable=False)
+    direction = db.Column(db.String(16), nullable=False)
+    subtotal = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    commission = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    net_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    status = db.Column(db.String(32), nullable=False, default='issued')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('invoices', lazy=True))
+    transaction = db.relationship('Transaction', backref=db.backref('invoice', uselist=False))
+
 
 def generate_csrf_token():
     token = session.get('csrf_token')
@@ -187,6 +267,128 @@ def calculate_commission(total_amount, broker):
     commission = total_amount * rate
     return commission.quantize(Decimal('0.01'))
 
+def get_notification_preferences(user_id):
+    return NotificationPreference.query.filter_by(user_id=user_id).first()
+
+
+def is_notification_enabled(preferences, category):
+    if preferences and not preferences.in_app_enabled:
+        return False
+    if not preferences:
+        return True
+    if category == 'trade':
+        return preferences.trade_notifications
+    if category == 'report':
+        return preferences.report_notifications
+    if category == 'invoice':
+        return preferences.invoice_notifications
+    return True
+
+
+def create_user_notification(user_id, category, title, message):
+    preferences = get_notification_preferences(user_id)
+    if not is_notification_enabled(preferences, category):
+        return None
+    notification = UserNotification(
+        user_id=user_id,
+        category=category,
+        title=title,
+        message=message,
+        is_read=False
+    )
+    db.session.add(notification)
+    return notification
+
+
+def generate_invoice_number():
+    while True:
+        candidate = f"INV-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2).upper()}"
+        if not Invoice.query.filter_by(invoice_number=candidate).first():
+            return candidate
+
+
+def create_invoice_for_transaction(user_id, transaction):
+    existing_invoice = Invoice.query.filter_by(transaction_id=transaction.id).first()
+    if existing_invoice:
+        return existing_invoice
+
+    subtotal = Decimal(transaction.total_amount or 0).quantize(Decimal('0.01'))
+    commission = Decimal(transaction.commission_amount or 0).quantize(Decimal('0.01'))
+    transaction_type = transaction.txn_type
+
+    if transaction_type == 'BUY':
+        direction = 'DEBIT'
+        net_amount = subtotal + commission
+    elif transaction_type == 'SELL':
+        direction = 'CREDIT'
+        net_amount = subtotal - commission
+    elif transaction_type == 'DIVIDEND':
+        direction = 'CREDIT'
+        net_amount = subtotal
+    else:
+        direction = 'INFO'
+        net_amount = subtotal
+
+    invoice = Invoice(
+        invoice_number=generate_invoice_number(),
+        user_id=user_id,
+        transaction_id=transaction.id,
+        transaction_type=transaction_type,
+        direction=direction,
+        subtotal=subtotal,
+        commission=commission,
+        net_amount=net_amount,
+        status='issued'
+    )
+    db.session.add(invoice)
+    return invoice
+
+
+def build_report_snapshot(user_id, period_days):
+    query = Transaction.query.filter_by(user_id=user_id)
+    if period_days > 0:
+        cutoff = datetime.utcnow() - dt.timedelta(days=period_days)
+        query = query.filter(Transaction.created_at >= cutoff)
+
+    transactions = query.all()
+    total_buys = Decimal('0')
+    total_sells = Decimal('0')
+    total_dividends = Decimal('0')
+    total_commissions = Decimal('0')
+
+    for txn in transactions:
+        amount = Decimal(txn.total_amount or 0)
+        commission = Decimal(txn.commission_amount or 0)
+        total_commissions += commission
+
+        if txn.txn_type == 'BUY':
+            total_buys += amount
+        elif txn.txn_type == 'SELL':
+            total_sells += amount
+        elif txn.txn_type == 'DIVIDEND':
+            total_dividends += amount
+
+    net_cashflow = (total_sells + total_dividends) - total_buys - total_commissions
+
+    return {
+        'total_buys': total_buys.quantize(Decimal('0.01')),
+        'total_sells': total_sells.quantize(Decimal('0.01')),
+        'total_dividends': total_dividends.quantize(Decimal('0.01')),
+        'total_commissions': total_commissions.quantize(Decimal('0.01')),
+        'net_cashflow': net_cashflow.quantize(Decimal('0.01')),
+    }
+
+
+def read_recent_log_entries(limit=20):
+    if not LOG_FILE_PATH.exists():
+        return []
+    try:
+        with LOG_FILE_PATH.open('r', encoding='utf-8', errors='ignore') as file_handle:
+            lines = file_handle.readlines()
+        return [line.strip() for line in lines[-limit:] if line.strip()]
+    except Exception:
+        return []
+
 
 with app.app_context():
     db.create_all()
@@ -198,6 +400,48 @@ def add_header(response):
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Expires'] = '0'
     return response
+
+
+@app.before_request
+def start_request_timer():
+    g.request_started_at = time.perf_counter()
+
+
+@app.after_request
+def capture_request_metrics(response):
+    start_time = getattr(g, 'request_started_at', None)
+    if start_time is not None:
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        REQUEST_METRICS['latency_ms'].append(latency_ms)
+    else:
+        latency_ms = 0
+
+    REQUEST_METRICS['total_requests'] += 1
+    if response.status_code >= 500:
+        REQUEST_METRICS['total_errors'] += 1
+
+    app.logger.info(
+        'HTTP %s %s -> %s (%.2f ms)',
+        request.method,
+        request.path,
+        response.status_code,
+        latency_ms
+    )
+    return response
+
+
+@app.route('/health')
+def health():
+    uptime_seconds = int((datetime.utcnow() - APP_START_TIME).total_seconds())
+    latencies = list(REQUEST_METRICS['latency_ms'])
+    avg_latency_ms = sum(latencies) / len(latencies) if latencies else 0
+    return {
+        'status': 'ok',
+        'uptime_seconds': uptime_seconds,
+        'total_requests': REQUEST_METRICS['total_requests'],
+        'total_errors': REQUEST_METRICS['total_errors'],
+        'avg_latency_ms': round(avg_latency_ms, 2)
+    }
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -221,7 +465,10 @@ def register():
         password_hash = generate_password_hash(password)
         user = User(email=email, username=username, password_hash=password_hash, role='user')
         db.session.add(user)
+        db.session.flush()
+        db.session.add(NotificationPreference(user_id=user.id))
         db.session.commit()
+        app.logger.info('User registered: %s', email)
         flash('Registration successful. Please log in.', 'success')
         return redirect(url_for('login'))
     return render_template('register.html')
@@ -235,6 +482,7 @@ def login():
         password = request.form.get('password', '')
         user = User.query.filter_by(email=email).first()
         if not user or not user.check_password(password) or not user.is_active:
+            app.logger.warning('Invalid login attempt for email: %s', email)
             flash('Invalid credentials.', 'danger')
             return render_template('login.html', email=email)
         session.clear()
@@ -242,12 +490,14 @@ def login():
         session['user_role'] = user.role
         user.last_login_at = datetime.utcnow()
         db.session.commit()
+        app.logger.info('User logged in: %s', email)
         return redirect(url_for('dashboard'))
     return render_template('login.html')
 
 
 @app.route('/logout')
 def logout():
+    app.logger.info('User logged out: %s', session.get('user_id'))
     session.clear()
     return redirect(url_for('index'))
 
@@ -325,10 +575,134 @@ def dashboard():
             
     cost_of_sold = total_buys - cost_of_held
     realized_profit = (total_sells + total_dividends) - cost_of_sold - total_commissions
+    notification_preferences = get_notification_preferences(user.id)
+    if not notification_preferences:
+        notification_preferences = NotificationPreference(
+            user_id=user.id,
+            in_app_enabled=True,
+            trade_notifications=True,
+            report_notifications=True,
+            invoice_notifications=True
+        )
+    recent_notifications = UserNotification.query.filter_by(user_id=user.id).order_by(UserNotification.created_at.desc()).limit(10).all()
+    recent_reports = ReportSnapshot.query.filter_by(user_id=user.id).order_by(ReportSnapshot.generated_at.desc()).limit(10).all()
+    latest_report = recent_reports[0] if recent_reports else None
+    recent_invoices = Invoice.query.filter_by(user_id=user.id).order_by(Invoice.created_at.desc()).limit(10).all()
 
     return render_template('dashboard.html', user=user, items=items, transactions=transactions,
                            current_portfolio_value=current_portfolio_value,
-                           realized_profit=realized_profit)
+                           realized_profit=realized_profit,
+                           notification_preferences=notification_preferences,
+                           recent_notifications=recent_notifications,
+                           recent_reports=recent_reports,
+                           latest_report=latest_report,
+                           recent_invoices=recent_invoices)
+
+@app.route('/settings/notifications', methods=['POST'])
+@login_required()
+def update_notification_settings():
+    verify_csrf()
+    user = get_current_user()
+    preferences = NotificationPreference.query.filter_by(user_id=user.id).first()
+    if not preferences:
+        preferences = NotificationPreference(user_id=user.id)
+        db.session.add(preferences)
+
+    preferences.in_app_enabled = request.form.get('in_app_enabled') == 'on'
+    preferences.trade_notifications = request.form.get('trade_notifications') == 'on'
+    preferences.report_notifications = request.form.get('report_notifications') == 'on'
+    preferences.invoice_notifications = request.form.get('invoice_notifications') == 'on'
+
+    db.session.commit()
+    app.logger.info('Notification settings updated for user_id=%s', user.id)
+    flash('Notification settings updated.', 'success')
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/reports/generate', methods=['POST'])
+@login_required()
+def generate_report():
+    verify_csrf()
+    user = get_current_user()
+    allowed_periods = {0, 7, 30, 90, 365}
+    try:
+        period_days = int(request.form.get('period_days', '30').strip())
+    except Exception:
+        period_days = 30
+
+    if period_days not in allowed_periods:
+        period_days = 30
+
+    snapshot = build_report_snapshot(user.id, period_days)
+    report_snapshot = ReportSnapshot(
+        user_id=user.id,
+        period_days=period_days,
+        total_buys=snapshot['total_buys'],
+        total_sells=snapshot['total_sells'],
+        total_dividends=snapshot['total_dividends'],
+        total_commissions=snapshot['total_commissions'],
+        net_cashflow=snapshot['net_cashflow'],
+    )
+    db.session.add(report_snapshot)
+
+    period_label = 'All time' if period_days == 0 else f'Last {period_days} days'
+    create_user_notification(
+        user.id,
+        'report',
+        'Portfolio report generated',
+        f'Report generated for {period_label}.'
+    )
+    db.session.commit()
+    app.logger.info('Report generated for user_id=%s period_days=%s', user.id, period_days)
+    flash(f'Report generated for {period_label}.', 'success')
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/notifications/read/<int:notification_id>', methods=['POST'])
+@login_required()
+def mark_notification_read(notification_id):
+    verify_csrf()
+    user = get_current_user()
+    notification = UserNotification.query.filter_by(id=notification_id, user_id=user.id).first()
+    if notification:
+        notification.is_read = True
+        db.session.commit()
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/invoices/<int:invoice_id>/download')
+@login_required()
+def download_invoice(invoice_id):
+    user = get_current_user()
+    invoice = Invoice.query.filter_by(id=invoice_id, user_id=user.id).first()
+    if not invoice:
+        abort(404)
+
+    transaction = invoice.transaction
+    company_symbol = transaction.company.symbol if transaction and transaction.company else '-'
+    broker_name = transaction.broker.name if transaction and transaction.broker else 'N/A'
+    created_at = invoice.created_at.strftime('%Y-%m-%d %H:%M:%S') if invoice.created_at else '-'
+    transaction_time = transaction.created_at.strftime('%Y-%m-%d %H:%M:%S') if transaction and transaction.created_at else '-'
+
+    invoice_content = '\n'.join([
+        f'Invoice Number: {invoice.invoice_number}',
+        f'Issued At: {created_at} UTC',
+        f'User: {user.username} ({user.email})',
+        f'Transaction ID: {invoice.transaction_id}',
+        f'Transaction Type: {invoice.transaction_type}',
+        f'Cash Direction: {invoice.direction}',
+        f'Symbol: {company_symbol}',
+        f'Broker: {broker_name}',
+        f'Transaction Timestamp: {transaction_time} UTC',
+        f'Subtotal: {invoice.subtotal}',
+        f'Commission: {invoice.commission}',
+        f'Net Amount: {invoice.net_amount}',
+        f'Status: {invoice.status}',
+    ])
+
+    response = Response(invoice_content, mimetype='text/plain; charset=utf-8')
+    response.headers['Content-Disposition'] = f'attachment; filename={invoice.invoice_number}.txt'
+    return response
 
 
 @app.route('/trade/buy', methods=['POST'])
@@ -386,7 +760,30 @@ def trade_buy():
                       commission_amount=commission, broker_id=broker.id if broker else None,
                       description=description)
     db.session.add(txn)
+    db.session.flush()
+    invoice = create_invoice_for_transaction(user.id, txn)
+    create_user_notification(
+        user.id,
+        'trade',
+        'Buy order executed',
+        f'Bought {quantity} share(s) of {symbol} at {Decimal(str(price)).quantize(Decimal("0.01"))}.'
+    )
+    if invoice:
+        create_user_notification(
+            user.id,
+            'invoice',
+            'Invoice issued',
+            f'Invoice {invoice.invoice_number} was generated for your BUY transaction.'
+        )
     db.session.commit()
+    app.logger.info(
+        'BUY executed user_id=%s symbol=%s quantity=%s total=%s commission=%s',
+        user.id,
+        symbol,
+        quantity,
+        total,
+        commission
+    )
     flash('Buy order executed in simulated portfolio.', 'success')
     return redirect(url_for('dashboard'))
 
@@ -437,7 +834,30 @@ def trade_sell():
                       commission_amount=commission, broker_id=broker.id if broker else None,
                       description=description)
     db.session.add(txn)
+    db.session.flush()
+    invoice = create_invoice_for_transaction(user.id, txn)
+    create_user_notification(
+        user.id,
+        'trade',
+        'Sell order executed',
+        f'Sold {quantity} share(s) of {symbol} at {Decimal(str(price)).quantize(Decimal("0.01"))}.'
+    )
+    if invoice:
+        create_user_notification(
+            user.id,
+            'invoice',
+            'Invoice issued',
+            f'Invoice {invoice.invoice_number} was generated for your SELL transaction.'
+        )
     db.session.commit()
+    app.logger.info(
+        'SELL executed user_id=%s symbol=%s quantity=%s total=%s commission=%s',
+        user.id,
+        symbol,
+        quantity,
+        total,
+        commission
+    )
     flash('Sell order executed in simulated portfolio.', 'success')
     return redirect(url_for('dashboard'))
 
@@ -457,7 +877,14 @@ def funds_topup():
         flash('Amount must be greater than zero.', 'danger')
         return redirect(url_for('dashboard'))
     user.wallet_balance = user.wallet_balance + amount
+    create_user_notification(
+        user.id,
+        'system',
+        'Wallet top-up recorded',
+        f'Wallet credited by {amount.quantize(Decimal("0.01"))}.'
+    )
     db.session.commit()
+    app.logger.info('Wallet top-up user_id=%s amount=%s', user.id, amount)
     flash('Wallet balance updated for simulation.', 'success')
     return redirect(url_for('dashboard'))
 
@@ -495,7 +922,29 @@ def record_dividend():
                       description='Dividend payout recorded')
     db.session.add(dividend)
     db.session.add(txn)
+    db.session.flush()
+    invoice = create_invoice_for_transaction(user.id, txn)
+    create_user_notification(
+        user.id,
+        'trade',
+        'Dividend recorded',
+        f'Dividend payout recorded for {symbol}: {total_amount.quantize(Decimal("0.01"))}.'
+    )
+    if invoice:
+        create_user_notification(
+            user.id,
+            'invoice',
+            'Invoice issued',
+            f'Invoice {invoice.invoice_number} was generated for your DIVIDEND transaction.'
+        )
     db.session.commit()
+    app.logger.info(
+        'DIVIDEND recorded user_id=%s symbol=%s quantity=%s total=%s',
+        user.id,
+        symbol,
+        item.quantity,
+        total_amount
+    )
     flash('Dividend recorded and wallet credited.', 'success')
     return redirect(url_for('dashboard'))
 
@@ -507,6 +956,9 @@ def admin_dashboard():
     broker_count = Broker.query.count()
     transaction_count = Transaction.query.count()
     company_count = Company.query.count()
+    invoice_count = Invoice.query.count()
+    report_count = ReportSnapshot.query.count()
+    notification_count = UserNotification.query.count()
     recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(25).all()
     brokers = Broker.query.order_by(Broker.name.asc()).all()
     companies = Company.query.order_by(Company.symbol.asc()).all()
@@ -535,6 +987,11 @@ def admin_dashboard():
     top_symbols_sorted = sorted(symbol_totals.items(), key=lambda kv: kv[1]['value'], reverse=True)[:5]
     top_symbol_labels = [s for s, _ in top_symbols_sorted]
     top_symbol_values = [float(stats['value']) for _, stats in top_symbols_sorted]
+    uptime_seconds = int((datetime.utcnow() - APP_START_TIME).total_seconds())
+    latencies = list(REQUEST_METRICS['latency_ms'])
+    avg_latency_ms = (sum(latencies) / len(latencies)) if latencies else 0
+    recent_logs = read_recent_log_entries(limit=20)
+    datasets = _list_datasets()
 
     return render_template(
         'admin_dashboard.html',
@@ -542,6 +999,9 @@ def admin_dashboard():
         broker_count=broker_count,
         transaction_count=transaction_count,
         company_count=company_count,
+        invoice_count=invoice_count,
+        report_count=report_count,
+        notification_count=notification_count,
         total_commission=total_commission,
         total_volume=total_volume,
         recent_transactions=recent_transactions,
@@ -551,6 +1011,12 @@ def admin_dashboard():
         top_symbol_labels=top_symbol_labels,
         top_symbol_values=top_symbol_values,
         companies=companies,
+        uptime_seconds=uptime_seconds,
+        total_requests=REQUEST_METRICS['total_requests'],
+        total_errors=REQUEST_METRICS['total_errors'],
+        avg_latency_ms=avg_latency_ms,
+        recent_logs=recent_logs,
+        datasets=datasets,
     )
 
 
@@ -575,10 +1041,87 @@ def admin_add_broker():
     broker = Broker(name=name, email=email or None, commission_rate=commission)
     db.session.add(broker)
     db.session.commit()
+    app.logger.info('Broker added by admin user_id=%s broker_name=%s', session.get('user_id'), name)
     flash('Broker added.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 
+
+
+import glob
+
+DATASET_DIR = Path(app.root_path)
+ALLOWED_TICKER_EXTENSIONS = {'.csv'}
+
+
+def _list_datasets():
+    """Return a list of dicts describing each CSV dataset in the app root."""
+    datasets = []
+    for csv_path in sorted(DATASET_DIR.glob('*.csv')):
+        stat = csv_path.stat()
+        datasets.append({
+            'name': csv_path.name,
+            'size_kb': round(stat.st_size / 1024, 1),
+            'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
+        })
+    return datasets
+
+
+@app.route('/admin/datasets')
+@login_required(role='admin')
+def admin_datasets():
+    """JSON endpoint: list all CSV datasets."""
+    return {'datasets': _list_datasets()}
+
+
+@app.route('/admin/datasets/upload', methods=['POST'])
+@login_required(role='admin')
+def admin_upload_dataset():
+    verify_csrf()
+    if 'dataset_file' not in request.files:
+        flash('No file part.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    file = request.files['dataset_file']
+    if file.filename == '':
+        flash('No file selected.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_TICKER_EXTENSIONS:
+        flash('Only .csv files are allowed.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    # Sanitise filename: keep only alphanumeric, dots, underscores, hyphens
+    safe_name = re.sub(r'[^A-Za-z0-9._\-]', '', file.filename)
+    if not safe_name:
+        flash('Invalid filename.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    dest = DATASET_DIR / safe_name
+    file.save(str(dest))
+    app.logger.info('Admin uploaded dataset %s (user_id=%s)', safe_name, session.get('user_id'))
+    flash(f'Dataset "{safe_name}" uploaded successfully.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/datasets/delete', methods=['POST'])
+@login_required(role='admin')
+def admin_delete_dataset():
+    verify_csrf()
+    filename = request.form.get('filename', '').strip()
+    if not filename:
+        flash('No filename provided.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    # Prevent path traversal
+    safe_name = Path(filename).name
+    if Path(safe_name).suffix.lower() not in ALLOWED_TICKER_EXTENSIONS:
+        flash('Only .csv datasets can be deleted.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    target = DATASET_DIR / safe_name
+    if not target.exists():
+        flash(f'Dataset "{safe_name}" not found.', 'warning')
+        return redirect(url_for('admin_dashboard'))
+    target.unlink()
+    app.logger.info('Admin deleted dataset %s (user_id=%s)', safe_name, session.get('user_id'))
+    flash(f'Dataset "{safe_name}" deleted.', 'success')
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/')
@@ -588,6 +1131,9 @@ def index():
 @app.route('/predict',methods = ['POST'])
 def predict():
     nm = request.form['nm']
+    prediction_mode = request.form.get('prediction_mode', 'close').strip().lower()
+    if prediction_mode not in ('close', 'volume'):
+        prediction_mode = 'close'
 
     #**************** FUNCTIONS TO FETCH DATA ***************************
     def get_historical(quote):
@@ -859,70 +1405,64 @@ def predict():
         print("##############################################################################")
         return lstm_pred,error_lstm,lstm_actual,lstm_predicted
     #***************** LINEAR REGRESSION SECTION ******************       
-    def LIN_REG_ALGO(df):
-        #No of days to be forcasted in future
+    def LIN_REG_ALGO(df, mode='close'):
+        """Linear Regression prediction.
+        mode='close'  -> predict Close price from previous Close (default)
+        mode='volume' -> predict Close price from Volume (volume-based catalyst)
+        """
         forecast_out = int(7)
-        #Price after n days
-        df['Close after n days'] = df['Close'].shift(-forecast_out)
-        #New df with only relevant data
-        df_new=df[['Close','Close after n days']]
 
-        #Structure data for train, test & forecast
-        #lables of known data, discard last 35 rows
-        y =np.array(df_new.iloc[:-forecast_out,-1])
-        y=np.reshape(y, (-1,1))
-        #all cols of known data except lables, discard last 35 rows
-        X=np.array(df_new.iloc[:-forecast_out,0:-1])
-        #Unknown, X to be forecasted
-        X_to_be_forecasted=np.array(df_new.iloc[-forecast_out:,0:-1])
-        
-        #Traning, testing to plot graphs, check accuracy
-        X_train=X[0:int(0.8*len(df)),:]
-        X_test=X[int(0.8*len(df)):,:]
-        y_train=y[0:int(0.8*len(df)),:]
-        y_test=y[int(0.8*len(df)):,:]
-        
-        # Feature Scaling===Normalization
+        if mode == 'volume':
+            # ---- Volume-Based Catalyst ----
+            # Target: Close price shifted forward by forecast_out days
+            df['Close after n days'] = df['Close'].shift(-forecast_out)
+            # Feature: Volume (normalised inside scaler)
+            df_new = df[['Volume', 'Close after n days']].copy()
+            feature_col = 'Volume'
+            print(f"[LR] Running in VOLUME-based mode for {quote}")
+        else:
+            # ---- Close-Price Catalyst (default) ----
+            df['Close after n days'] = df['Close'].shift(-forecast_out)
+            df_new = df[['Close', 'Close after n days']].copy()
+            feature_col = 'Close'
+            print(f"[LR] Running in CLOSE-price mode for {quote}")
+
+        # Shared structure for both modes
+        y = np.array(df_new.iloc[:-forecast_out, -1])
+        y = np.reshape(y, (-1, 1))
+        X = np.array(df_new.iloc[:-forecast_out, 0:-1])
+        X_to_be_forecasted = np.array(df_new.iloc[-forecast_out:, 0:-1])
+
+        X_train = X[0:int(0.8 * len(df)), :]
+        X_test  = X[int(0.8 * len(df)):, :]
+        y_train = y[0:int(0.8 * len(df)), :]
+        y_test  = y[int(0.8 * len(df)):, :]
+
         from sklearn.preprocessing import StandardScaler
         sc = StandardScaler()
         X_train = sc.fit_transform(X_train)
-        X_test = sc.transform(X_test)
-        
-        X_to_be_forecasted=sc.transform(X_to_be_forecasted)
-        
-        #Training
+        X_test  = sc.transform(X_test)
+        X_to_be_forecasted = sc.transform(X_to_be_forecasted)
+
         clf = LinearRegression(n_jobs=-1)
         clf.fit(X_train, y_train)
-        
-        #Testing
-        y_test_pred=clf.predict(X_test)
-        y_test_pred=y_test_pred*(1.04)
-        
-        # Store data for D3 visualization
-        lr_actual = y_test.flatten().tolist()
+
+        y_test_pred = clf.predict(X_test)
+        y_test_pred = y_test_pred * (1.04)
+
+        lr_actual    = y_test.flatten().tolist()
         lr_predicted = y_test_pred.flatten().tolist()
-        
-        # import matplotlib.pyplot as plt2
-        # fig = plt2.figure(figsize=(7.2,4.8),dpi=65)
-        # plt2.plot(y_test, label='Actual Price', linestyle=':', color='#1F77B4')
-        # plt2.plot(y_test_pred, label='Predicted Price', color='#4B73B1')
-        
-        # plt2.legend(loc=4)
-        # plt2.savefig('static/LR.png')
-        # plt2.close(fig)
-        
+
         error_lr = math.sqrt(mean_squared_error(y_test, y_test_pred))
-        
-        
-        #Forecasting
+
         forecast_set = clf.predict(X_to_be_forecasted)
-        forecast_set=forecast_set*(1.04)
-        mean=forecast_set.mean()
-        lr_pred=forecast_set[0,0]
+        forecast_set = forecast_set * (1.04)
+        mean = forecast_set.mean()
+        lr_pred = forecast_set[0, 0]
         print()
         print("##############################################################################")
-        print("Tomorrow's ",quote," Closing Price Prediction by Linear Regression: ",lr_pred)
-        print("Linear Regression RMSE:",error_lr)
+        print(f"Tomorrow's {quote} Closing Price Prediction by Linear Regression ({mode.upper()}): {lr_pred}")
+        print("Linear Regression RMSE:", error_lr)
         print("##############################################################################")
         return df, lr_pred, forecast_set, mean, error_lr, lr_actual, lr_predicted
 
@@ -974,7 +1514,8 @@ def predict():
         df = pd.read_csv(''+quote+'.csv')
         print("##############################################################################")
         print("Today's",quote,"Stock Data: ")
-        today_stock=df.iloc[-1:]
+        # Forward fill to prevent NaN displaying when the latest fetched row is incomplete
+        today_stock=df.ffill().iloc[-1:]
         print(today_stock)
         print("##############################################################################")
         df = df.dropna()
@@ -994,8 +1535,8 @@ def predict():
         arima_pred, error_arima, arima_actual, arima_predicted = 0, 0, [], []
         lstm_pred, error_lstm, lstm_actual, lstm_predicted = 0, 0, [], []
         
-        # Run only Linear Regression
-        df, lr_pred, forecast_set,mean,error_lr, lr_actual, lr_predicted=LIN_REG_ALGO(df)
+        # Run only Linear Regression (mode determined by user's catalyst choice)
+        df, lr_pred, forecast_set, mean, error_lr, lr_actual, lr_predicted = LIN_REG_ALGO(df, mode=prediction_mode)
         
         # Use FREE news-based sentiment analysis instead of Twitter
         print()
@@ -1018,7 +1559,8 @@ def predict():
                                arima_actual=arima_actual, arima_predicted=arima_predicted,
                                lstm_actual=lstm_actual, lstm_predicted=lstm_predicted,
                                lr_actual=lr_actual, lr_predicted=lr_predicted,
-                               pos=pos, neg=neg, neutral=neutral)
+                               pos=pos, neg=neg, neutral=neutral,
+                               prediction_mode=prediction_mode)
 if __name__ == '__main__':
    app.run(debug=True)
    

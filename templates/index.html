@@ -416,6 +416,44 @@
         font-size: 1rem;
       }
     }
+    /* Prediction Catalyst Toggle */
+    .catalyst-toggle {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .catalyst-option {
+      cursor: pointer;
+      margin: 0;
+      flex: 1;
+    }
+    .catalyst-option input[type="radio"] {
+      display: none;
+    }
+    .catalyst-pill {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 18px;
+      border: 2px solid #161616;
+      background: #fdfdf8;
+      font-weight: 700;
+      font-size: .88rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      box-shadow: 2px 2px 0 rgba(0,0,0,.25);
+      transition: background .15s, color .15s, box-shadow .15s, transform .1s;
+      user-select: none;
+    }
+    .catalyst-option input[type="radio"]:checked + .catalyst-pill {
+      background: #161616;
+      color: #fff;
+      box-shadow: none;
+      transform: translate(2px, 2px);
+    }
+    .catalyst-option:hover .catalyst-pill {
+      background: #e8f0fe;
+    }
   </style>
 </head>
 
@@ -448,7 +486,7 @@
         <h1 class="hero-title">Calm, Data-Driven Stock Forecasts</h1>
         <p class="hero-subtitle">
           Enter a stock symbol below to generate tomorrow's price forecasts and a sentiment overview
-          using linear regression and recent news.
+          using linear regression and recent news. Choose your prediction catalyst below.
         </p>
       </div>
     </div>
@@ -468,6 +506,25 @@
         <div class="prediction-input">
           <input type="text" class="form-control" name="nm" placeholder="Company Stock Symbol (e.g. AAPL, GOOGL)"
             required>
+        </div>
+        <!-- Prediction Catalyst Toggle -->
+        <div class="prediction-input">
+          <label class="form-label d-block" style="font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:.85rem;margin-bottom:8px;">Prediction Catalyst</label>
+          <div class="catalyst-toggle">
+            <label class="catalyst-option" id="catalyst-label-close">
+              <input type="radio" name="prediction_mode" value="close" checked id="mode-close">
+              <span class="catalyst-pill">
+                <i class="fa fa-line-chart" style="margin-right:5px;"></i>Close Price
+              </span>
+            </label>
+            <label class="catalyst-option" id="catalyst-label-volume">
+              <input type="radio" name="prediction_mode" value="volume" id="mode-volume">
+              <span class="catalyst-pill">
+                <i class="fa fa-bar-chart" style="margin-right:5px;"></i>Volume
+              </span>
+            </label>
+          </div>
+          <small class="text-muted" style="font-size:.78rem;margin-top:6px;display:block;">Select the primary feature used by the Linear Regression model.</small>
         </div>
         <div class="prediction-input">
           <button class="btn btn-primary prediction-btn" type="submit">View Forecast</button>

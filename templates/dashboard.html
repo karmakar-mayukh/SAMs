@@ -295,6 +295,192 @@
                         </div>
                     </div>
                 </div>
+                <div class="row mb-4">
+                    <div class="col-12 col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-title">
+                                <h4>Notification Settings</h4>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ url_for('update_notification_settings') }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input" id="in_app_enabled" name="in_app_enabled" {% if notification_preferences.in_app_enabled %}checked{% endif %}>
+                                        <label class="form-check-label" for="in_app_enabled">Enable in-app notifications</label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input" id="trade_notifications" name="trade_notifications" {% if notification_preferences.trade_notifications %}checked{% endif %}>
+                                        <label class="form-check-label" for="trade_notifications">Trade updates</label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input" id="report_notifications" name="report_notifications" {% if notification_preferences.report_notifications %}checked{% endif %}>
+                                        <label class="form-check-label" for="report_notifications">Report generation updates</label>
+                                    </div>
+                                    <div class="form-check mb-3">
+                                        <input type="checkbox" class="form-check-input" id="invoice_notifications" name="invoice_notifications" {% if notification_preferences.invoice_notifications %}checked{% endif %}>
+                                        <label class="form-check-label" for="invoice_notifications">Invoice updates</label>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-title">
+                                <h4>Reporting System</h4>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ url_for('generate_report') }}" class="form-inline mb-3">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="form-group mr-sm-2">
+                                        <label for="period_days" class="sr-only">Period</label>
+                                        <select id="period_days" name="period_days" class="form-control">
+                                            <option value="7">Last 7 Days</option>
+                                            <option value="30" selected>Last 30 Days</option>
+                                            <option value="90">Last 90 Days</option>
+                                            <option value="365">Last 365 Days</option>
+                                            <option value="0">All Time</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn btn-success">Generate Report</button>
+                                </form>
+                                {% if latest_report %}
+                                <p class="mb-1"><strong>Latest Report:</strong> {{ latest_report.generated_at }}</p>
+                                <p class="mb-1">Buys: {{ '%.2f'|format(latest_report.total_buys) }}</p>
+                                <p class="mb-1">Sells: {{ '%.2f'|format(latest_report.total_sells) }}</p>
+                                <p class="mb-1">Dividends: {{ '%.2f'|format(latest_report.total_dividends) }}</p>
+                                <p class="mb-1">Commissions: {{ '%.2f'|format(latest_report.total_commissions) }}</p>
+                                <p class="mb-0"><strong>Net Cashflow:</strong> {{ '%.2f'|format(latest_report.net_cashflow) }}</p>
+                                {% else %}
+                                <p class="mb-0">No reports generated yet.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-4">
+                    <div class="col-12 col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-title">
+                                <h4>Recent Notifications</h4>
+                            </div>
+                            <div class="card-body table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Title</th>
+                                            <th>Message</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for n in recent_notifications %}
+                                        <tr>
+                                            <td>{{ n.created_at }}</td>
+                                            <td>{{ n.title }}</td>
+                                            <td>{{ n.message }}</td>
+                                            <td>
+                                                {% if n.is_read %}
+                                                Read
+                                                {% else %}
+                                                <form method="POST" action="{{ url_for('mark_notification_read', notification_id=n.id) }}">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-primary">Mark Read</button>
+                                                </form>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="4">No notifications yet.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-title">
+                                <h4>Enhanced Invoices</h4>
+                            </div>
+                            <div class="card-body table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Invoice #</th>
+                                            <th>Type</th>
+                                            <th>Direction</th>
+                                            <th>Net Amount</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for inv in recent_invoices %}
+                                        <tr>
+                                            <td>{{ inv.created_at }}</td>
+                                            <td>{{ inv.invoice_number }}</td>
+                                            <td>{{ inv.transaction_type }}</td>
+                                            <td>{{ inv.direction }}</td>
+                                            <td>{{ '%.2f'|format(inv.net_amount) }}</td>
+                                            <td><a href="{{ url_for('download_invoice', invoice_id=inv.id) }}" class="btn btn-sm btn-primary">Download</a></td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="6">No invoices generated yet.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card h-100">
+                            <div class="card-title">
+                                <h4>Report History</h4>
+                            </div>
+                            <div class="card-body table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Generated At</th>
+                                            <th>Period (Days)</th>
+                                            <th>Buys</th>
+                                            <th>Sells</th>
+                                            <th>Dividends</th>
+                                            <th>Commissions</th>
+                                            <th>Net Cashflow</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for r in recent_reports %}
+                                        <tr>
+                                            <td>{{ r.generated_at }}</td>
+                                            <td>{{ 'All Time' if r.period_days == 0 else r.period_days }}</td>
+                                            <td>{{ '%.2f'|format(r.total_buys) }}</td>
+                                            <td>{{ '%.2f'|format(r.total_sells) }}</td>
+                                            <td>{{ '%.2f'|format(r.total_dividends) }}</td>
+                                            <td>{{ '%.2f'|format(r.total_commissions) }}</td>
+                                            <td>{{ '%.2f'|format(r.net_cashflow) }}</td>
+                                        </tr>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="7">No reports in history yet.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
