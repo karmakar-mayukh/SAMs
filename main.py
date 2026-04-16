@@ -43,13 +43,49 @@ warnings.filterwarnings("ignore")
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+# Ticker symbols used as filenames / passed to third-party APIs. Accept only
+# uppercase letters, digits, dots and hyphens (the characters legitimately used
+# in Yahoo/Alpha Vantage tickers) and cap the length. This is enforced in the
+# /predict route to prevent path traversal and SSRF-style attacks where a
+# crafted symbol would be treated as a file path or shell-unsafe argument.
+TICKER_SYMBOL_RE = re.compile(r'^[A-Z0-9.\-]{1,10}$')
+
+
+def _sanitize_ticker(raw):
+    """Return an uppercased ticker string if valid, else None."""
+    if not raw:
+        return None
+    candidate = raw.strip().upper()
+    if not TICKER_SYMBOL_RE.match(candidate):
+        return None
+    return candidate
+
+
 #***************** FLASK *****************************
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'CHANGE_ME_IN_PRODUCTION')
+
+# SECRET_KEY must be provided via environment in production. When not set we
+# generate an ephemeral random key so sessions still work in local development,
+# but log a loud warning so operators don't accidentally deploy without one.
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    if os.environ.get('FLASK_ENV') == 'production':
+        raise RuntimeError(
+            'SECRET_KEY environment variable must be set in production.'
+        )
+    _secret_key = secrets.token_urlsafe(32)
+    logging.getLogger(__name__).warning(
+        'SECRET_KEY not set in environment; generated an ephemeral key for this '
+        'process only. Sessions will not survive restarts. Set SECRET_KEY for '
+        'any non-development deployment.'
+    )
+app.config['SECRET_KEY'] = _secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///sams_database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Only allow cookies over HTTPS when running in production.
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
 db = SQLAlchemy(app)
 APP_START_TIME = datetime.utcnow()
 REQUEST_METRICS = {
@@ -1130,7 +1166,14 @@ def index():
 
 @app.route('/predict',methods = ['POST'])
 def predict():
-    nm = request.form['nm']
+    # Validate the ticker symbol before using it anywhere. The value ends up in
+    # filenames (`{quote}.csv`), in outbound HTTP requests to Yahoo/Alpha
+    # Vantage, and in rendered HTML, so unvalidated input could enable path
+    # traversal (e.g. "../../etc/passwd") or be used to overwrite arbitrary
+    # CSV files on disk when yfinance returns data for a crafted symbol.
+    nm = _sanitize_ticker(request.form.get('nm', ''))
+    if not nm:
+        return render_template('index.html', not_found=True)
     prediction_mode = request.form.get('prediction_mode', 'close').strip().lower()
     if prediction_mode not in ('close', 'volume'):
         prediction_mode = 'close'
@@ -1181,9 +1224,16 @@ def predict():
             return
 
         # 4. Fallback to Alpha Vantage (Global symbols)
+        alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_API_KEY')
+        if not alpha_vantage_key:
+            print(
+                f"yfinance failed for {quote} and ALPHA_VANTAGE_API_KEY is not "
+                f"configured; skipping Alpha Vantage fallback."
+            )
+            raise Exception(f"Could not fetch data for {quote} from any source.")
         print(f"yfinance failed for {quote}, falling back to Alpha Vantage...")
         try:
-            ts = TimeSeries(key='N6A6QT6IBFJOPJ70', output_format='pandas')
+            ts = TimeSeries(key=alpha_vantage_key, output_format='pandas')
             # Use get_daily instead of get_daily_adjusted as the latter is often premium
             try:
                 data, meta_data = ts.get_daily(symbol=quote, outputsize='full')
@@ -1562,7 +1612,11 @@ def predict():
                                pos=pos, neg=neg, neutral=neutral,
                                prediction_mode=prediction_mode)
 if __name__ == '__main__':
-   app.run(debug=True)
+    # Flask's debug mode enables the Werkzeug debugger, which exposes an
+    # interactive Python shell on any unhandled exception. Never leave it on
+    # by default; require an explicit opt-in.
+    debug_enabled = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
+    app.run(debug=debug_enabled)
    
 
 
