@@ -45,11 +45,27 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 #***************** FLASK *****************************
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'CHANGE_ME_IN_PRODUCTION')
+
+# SECRET_KEY must be provided via environment in production. Fall back to a
+# randomly-generated per-process key for development/testing so sessions still
+# work, but never ship a hardcoded predictable value.
+_secret_key = os.environ.get('SECRET_KEY')
+if not _secret_key:
+    if os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENV') == 'production':
+        raise RuntimeError(
+            'SECRET_KEY environment variable must be set in production. '
+            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(64))"'
+        )
+    _secret_key = secrets.token_urlsafe(64)
+app.config['SECRET_KEY'] = _secret_key
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///sams_database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Only send session cookie over HTTPS when explicitly enabled (opt-in so local
+# HTTP development still works). Set SESSION_COOKIE_SECURE=1 in production.
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', '0') == '1'
 db = SQLAlchemy(app)
 APP_START_TIME = datetime.utcnow()
 REQUEST_METRICS = {
@@ -1128,9 +1144,32 @@ def admin_delete_dataset():
 def index():
    return render_template('index.html')
 
-@app.route('/predict',methods = ['POST'])
+# Allow only safe ticker symbols to be used as filenames / Alpha Vantage
+# lookups. This prevents path traversal when we write `{symbol}.csv` in
+# get_historical and protects against injection into third-party URLs.
+_SYMBOL_RE = re.compile(r'^[A-Z0-9][A-Z0-9._\-]{0,15}$')
+
+
+def _validate_symbol(raw_symbol):
+    if raw_symbol is None:
+        return None
+    candidate = raw_symbol.strip().upper()
+    if not candidate or not _SYMBOL_RE.match(candidate):
+        return None
+    return candidate
+
+
+@app.route('/predict', methods=['POST'])
 def predict():
-    nm = request.form['nm']
+    # /predict is reachable from the public landing page, so we do not require
+    # authentication here — but we DO strictly validate the ticker symbol
+    # because it is later used to construct a local CSV filename (path
+    # traversal risk) and to build third-party API URLs.
+    raw_symbol = request.form.get('nm', '')
+    nm = _validate_symbol(raw_symbol)
+    if nm is None:
+        app.logger.warning('Rejected invalid predict symbol: %r', raw_symbol)
+        return render_template('index.html', not_found=True)
     prediction_mode = request.form.get('prediction_mode', 'close').strip().lower()
     if prediction_mode not in ('close', 'volume'):
         prediction_mode = 'close'
@@ -1182,8 +1221,14 @@ def predict():
 
         # 4. Fallback to Alpha Vantage (Global symbols)
         print(f"yfinance failed for {quote}, falling back to Alpha Vantage...")
+        alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_API_KEY')
+        if not alpha_vantage_key:
+            raise Exception(
+                f"Could not fetch data for {quote}: yfinance returned no data "
+                "and ALPHA_VANTAGE_API_KEY is not configured for the fallback."
+            )
         try:
-            ts = TimeSeries(key='N6A6QT6IBFJOPJ70', output_format='pandas')
+            ts = TimeSeries(key=alpha_vantage_key, output_format='pandas')
             # Use get_daily instead of get_daily_adjusted as the latter is often premium
             try:
                 data, meta_data = ts.get_daily(symbol=quote, outputsize='full')
@@ -1562,7 +1607,10 @@ def predict():
                                pos=pos, neg=neg, neutral=neutral,
                                prediction_mode=prediction_mode)
 if __name__ == '__main__':
-   app.run(debug=True)
+    # Debug mode enables the Werkzeug debugger which allows arbitrary code
+    # execution; never enable it by default. Set FLASK_DEBUG=1 locally to opt in.
+    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
+    app.run(debug=debug_mode)
    
 
 
