@@ -156,3 +156,13 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Secrets and credentials — never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+admin_login_credentials*.png
+admin_login_credentials*.jpg
+admin_login_credentials*.jpeg
