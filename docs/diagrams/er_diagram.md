@@ -16,12 +16,15 @@ erDiagram
         int id
         string symbol
         string name
+        string exchange
+        string sector
         bool is_active
     }
 
     BROKER {
         int id
         string name
+        string email
         decimal commission_rate
         bool is_active
     }
@@ -32,6 +35,7 @@ erDiagram
         int company_id
         int quantity
         decimal average_buy_price
+        datetime created_at
     }
 
     TRANSACTION {
@@ -50,9 +54,57 @@ erDiagram
 
     DIVIDEND {
         int id
+        int portfolio_item_id
+        decimal amount_per_share
+        decimal total_amount
+        date payable_date
+        datetime created_at
+    }
+
+    NOTIFICATION_PREFERENCE {
+        int id
         int user_id
-        int company_id
-        decimal amount
+        bool in_app_enabled
+        bool trade_notifications
+        bool report_notifications
+        bool invoice_notifications
+        datetime created_at
+        datetime updated_at
+    }
+
+    USER_NOTIFICATION {
+        int id
+        int user_id
+        string category
+        string title
+        string message
+        bool is_read
+        datetime created_at
+    }
+
+    REPORT_SNAPSHOT {
+        int id
+        int user_id
+        int period_days
+        decimal total_buys
+        decimal total_sells
+        decimal total_dividends
+        decimal total_commissions
+        decimal net_cashflow
+        datetime generated_at
+    }
+
+    INVOICE {
+        int id
+        string invoice_number
+        int user_id
+        int transaction_id
+        string transaction_type
+        string direction
+        decimal subtotal
+        decimal commission
+        decimal net_amount
+        string status
         datetime created_at
     }
 
@@ -63,6 +115,11 @@ erDiagram
     COMPANY ||--o{ TRANSACTION : "is traded in"
     BROKER ||--o{ TRANSACTION : "charges commission on"
 
-    USER ||--o{ DIVIDEND : "receives"
-    COMPANY ||--o{ DIVIDEND : "issues"
+    PORTFOLIO_ITEM ||--o{ DIVIDEND : "accrues"
+
+    USER ||--o| NOTIFICATION_PREFERENCE : "configures"
+    USER ||--o{ USER_NOTIFICATION : "receives"
+    USER ||--o{ REPORT_SNAPSHOT : "generates"
+    USER ||--o{ INVOICE : "is billed with"
+    TRANSACTION ||--o| INVOICE : "generates"
 ```

@@ -6,45 +6,47 @@ flowchart LR
     MarketData[["Market Data APIs"]]
 
     %% Processes
-    P1["P1: Authentication"]
-    P2["P2: Portfolio Management"]
-    P3["P3: Prediction Engine"]
-    P4["P4: Sentiment Analysis"]
-    P5["P5: Admin Monitoring"]
+    P1["P1: Authentication & Profile"]
+    P2["P2: Portfolio & Simulated Trading"]
+    P3["P3: Dual-Mode Prediction Engine"]
+    P4["P4: Multi-Source Sentiment Analysis"]
+    P5["P5: Notification & Reporting"]
+    P6["P6: Admin Governance & Monitoring"]
 
     %% Data Stores
-    DS_User[("D1: User DB")]
-    DS_Company[("D2: Company DB")]
-    DS_Portfolio[("D3: Portfolio DB")]
-    DS_Txn[("D4: Transaction DB")]
-    DS_Dividend[("D5: Dividend DB")]
+    DS_User[("D1: User & Preferences")]
+    DS_Company[("D2: Companies & Datasets")]
+    DS_Portfolio[("D3: Portfolio & Invoices")]
+    DS_Txn[("D4: Transactions & Logs")]
 
     %% Flows
-    User -->|Login/Logout| P1
-    P1 -->|User details| DS_User
+    User -->|Login / Preferences| P1
+    P1 -->|Store / Fetch| DS_User
     P1 -->|Auth result| User
 
-    User -->|Trade / Dividend Requests| P2
-    P2 -->|Portfolio updates| DS_Portfolio
-    P2 -->|Transactions| DS_Txn
-    P2 -->|Dividends| DS_Dividend
-    P2 -->|Dashboard views| User
+    User -->|Trade / Dividend / Report Requests| P2
+    P2 -->|Portfolio & Invoice updates| DS_Portfolio
+    P2 -->|Log transactions| DS_Txn
+    P2 -->|Visualizations| User
 
-    P2 -->|Symbol & history request| P3
-    P3 -->|Historical data & predictions| P2
+    P2 -->|Symbol / Catalyst Mode| P3
+    P3 -->|Price & Volume Predictions| P2
 
     P3 -->|Price/News requests| MarketData
     MarketData -->|Price/News data| P3
 
-    P3 -->|News text| P4
-    P4 -->|Sentiment scores| P3
+    P3 -->|News aggregator| P4
+    P4 -->|Sentiment polarity| P3
 
-    Admin -->|Monitoring requests| P5
-    P5 -->|Aggregated stats| Admin
+    P2 -->|Trigger alerts / snapshots| P5
+    P5 -->|Deliver alerts / PDF / Text| User
+    P5 -->|Store metadata| DS_Portfolio
 
-    P5 --> DS_User
-    P5 --> DS_Company
-    P5 --> DS_Portfolio
-    P5 --> DS_Txn
-    P5 --> DS_Dividend
+    Admin -->|Governance / Health Monitoring| P6
+    P6 -->|Dataset uploads / Metrics| Admin
+
+    P6 <--> DS_User
+    P6 <--> DS_Company
+    P6 <--> DS_Portfolio
+    P6 <--> DS_Txn
 ```

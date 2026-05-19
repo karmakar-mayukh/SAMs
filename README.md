@@ -1,7 +1,6 @@
-
 # Stock Analysis & Market Sentiment System
 
-A full-stack web application that combines machine learning-based stock price prediction with sentiment analysis of financial news and integrated portfolio management. This system provides a simulated trading environment where users can experiment with stock predictions and portfolio strategies in a risk-free setting.
+A comprehensive, full-stack web application that integrates machine-learning forecasting, news-driven sentiment analysis, and a risk-free simulated brokerage into a unified platform. Designed for students, researchers, and investors, this system bridges the gap between standalone prediction tools and functional portfolio management environments.
 
 ## Table of Contents
 - [Project Overview](#project-overview)
@@ -9,237 +8,95 @@ A full-stack web application that combines machine learning-based stock price pr
 - [Technology Stack](#technology-stack)
 - [Architecture](#architecture)
 - [System Components](#system-components)
+- [Quick Start](#quick-start-for-new-users)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Project Structure](#project-structure)
 - [Documentation](#documentation)
-- [Contributing](#contributing)
 - [License](#license)
 
 ## Project Overview
 
-This project presents a Stock Analysis & Market Sentiment system that integrates customer profiles, stock data, and predictive analytics into one full-stack web application. The system provides simulated buy/sell transactions, fund and dividend tracking, broker commission management, and an admin monitoring dashboard.
+This project delivers an end-to-end decision-support platform that combines quantitative equity models with qualitative market signals. By embedding short-horizon forecasting and sentiment scoring into a complete paper-trading workflow, the application provides a practical resource for learning and experimentation in equity markets.
 
-On the prediction side, an LSTM-based model (with classical ARIMA and Linear Regression baselines) forecasts future stock trends using historical prices, while a sentiment analysis module aggregates recent financial-news sentiment to give additional context. The backend is implemented in Python using Flask, with a SQLite database and responsive web interfaces, and the prediction outputs are visualised through interactive D3-based charts and summary widgets on the results page.
-
-The proposed system is intended for students, researchers, and amateur investors who wish to explore stock prediction and portfolio management in a safe, simulated environment. It closes gaps in the literature by embedding forecasting models into an end-to-end management workflow with explainable dashboards rather than providing prediction in isolation.
+The system features a **dual-mode forecasting engine** and a **multi-source sentiment aggregator**, all managed through intuitive user and administrator dashboards.
 
 ## Key Features
 
-### Portfolio Management
-- User registration and authentication with role-based access control
-- Virtual wallet and fund tracking for simulated trading
-- Stock buy/sell operations with commission calculations
-- Dividend recording and tracking
-- Portfolio holdings visualization and performance metrics
+### Dual-Mode Prediction Engine
+- **Linear Regression Core**: Projects closing prices 7 days ahead with calculated RMSE accuracy scores.
+- **Close-Price Mode**: Forecasts based on historical pricing patterns.
+- **Volume-Based Mode**: Uses trading activity as the primary predictive signal.
+- **Catalyst Badges**: Visual indicators on the results page showing which model mode is active.
+- **Interactive Visualizations**: D3.js-based charts for comparing actual vs. predicted performance.
 
-### Prediction Engine
-- LSTM neural network for stock price prediction
-- Classical baseline models (ARIMA, Linear Regression)
-- Financial news sentiment analysis using multiple sources
-- Interactive visualization of prediction accuracy
-- Seven-day forward price forecasting
+### Portfolio & Simulation Module
+- **Risk-Free Trading**: Full support for buy/sell order execution with a virtual cash wallet.
+- **Integrated Portfolio Oversight**: Real-time valuation, dividend logging, and searchable transaction history.
+- **Automated Invoicing**: Every trade automatically generates a downloadable plain-text invoice.
+- **Notification Layer**: In-app alerts for trades, reports, and billing, with customizable user preferences.
+- **Portfolio Snapshots**: On-demand performance reports for multiple time horizons (7, 30, 90, 365 days, or all-time).
 
-### Administration
-- User and company management
-- Broker configuration with commission rates
-- Transaction monitoring and reporting
-- System statistics dashboard
+### Advanced Administration
+- **Live Traffic Metrics**: Monitoring of per-request latency, error counts, and system uptime.
+- **Dataset Management**: Administrative interface for uploading, inspecting, and removing CSV files used for model training.
+- **Brokerage Governance**: Configuration of active brokers and adjustable commission rates.
+- **System Integrity**: `/health` endpoint for external monitoring and size-based rotating logs (`logs/app.log`).
 
 ## Technology Stack
 
-### Backend
-- **Python** - Core programming language
-- **Flask** - Web framework
-- **SQLite** - Database management
-- **SQLAlchemy** - ORM for database operations
-
-### Machine Learning & Analytics
-- **TensorFlow/Keras** - Deep learning framework
-- **Scikit-learn** - Machine learning algorithms
-- **Statsmodels** - Statistical modeling (ARIMA)
-- **NLTK** - Natural language processing
-- **TextBlob/FinVADER** - Sentiment analysis
-- **YFinance** - Stock market data retrieval
-- **Alpha Vantage** - Financial data API
-
-### Frontend
-- **HTML5/CSS3** - Markup and styling
-- **Bootstrap** - Responsive design framework
-- **JavaScript** - Client-side interactivity
-- **D3.js** - Data visualization
-- **jQuery** - DOM manipulation
+- **Backend**: Python, Flask
+- **Database / ORM**: SQLite, SQLAlchemy
+- **ML & Analytics**: scikit-learn (Linear Regression), pandas, NumPy
+- **Sentiment / NLP**: NLTK VADER, TextBlob, BeautifulSoup, requests, newspaper3k, aiohttp, tenacity
+- **Frontend**: HTML/CSS, Bootstrap, JavaScript, D3.js
 
 ## Architecture
 
-The system follows a three-tier architecture:
+The system follows a classic **three-tier architecture**:
+1. **Presentation Layer**: Responsive web interface and interactive D3.js dashboards.
+2. **Application Layer**: Flask-based backend handling business logic, prediction orchestration, and security.
+3. **Data Layer**: SQLite relational database for persistence of user data, transactions, and system settings.
 
-1. **Presentation Layer**: Responsive web interface built with HTML, CSS, Bootstrap, and JavaScript
-2. **Application Layer**: Python/Flask backend implementing business logic, prediction models, and data processing
-3. **Data Layer**: SQLite database managed through SQLAlchemy ORM
+## Quick Start for New Users
 
-## System Components
+### 1. Prerequisites
+- Python 3.7+ installed.
+- Access to a terminal/command prompt.
 
-### Database Schema
-The system uses a relational database with the following key entities:
-- **User**: Authentication and profile information
-- **Company**: Stock information and metadata
-- **Broker**: Commission configuration
-- **PortfolioItem**: User holdings tracking
-- **Transaction**: Buy/sell records with commission tracking
-- **Dividend**: Dividend payout records
-
-### Prediction Models
-Three predictive models are implemented:
-1. **LSTM Neural Network**: Deep learning model for complex pattern recognition
-2. **ARIMA**: Classical statistical model for time series forecasting
-3. **Linear Regression**: Simple baseline model for comparison
-
-### Sentiment Analysis
-Financial news sentiment is gathered from multiple sources:
-- Finviz scraping with FinVADER sentiment analysis
-- Alternative news sources as fallbacks
-- Aggregation of sentiment scores over time windows
-
-## 🚀 Quick Start for New Users
-
-If you're downloading or cloning this project for the first time, follow these steps immediately:
-
-### 1. Install Python 3.7+
-Make sure you have Python installed. Download from [python.org](https://www.python.org/downloads/)
-
-### 2. Create a Virtual Environment
+### 2. Environment Setup
 ```bash
 python -m venv venv
-# On Windows:
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# Windows:
 venv\Scripts\activate
-# On Mac/Linux:
+# Mac/Linux:
 source venv/bin/activate
 ```
 
-### 3. Install All Dependencies (CRITICAL)
+### 3. Installation
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Create Admin Account (Required for Dashboard Access)
+### 4. Initialize Database & Admin
 ```bash
-# On Windows:
-.\venv\Scripts\python create_admin.py
-# On Mac/Linux:
-python3 create_admin.py
-```
-This creates the default admin account: `admin@example.com` / `admin123`
-
-### 5. Run the Application
-```bash
-# On Windows:
-.\venv\Scripts\python main.py
-# On Mac/Linux:
-python3 main.py
+# Creates the default admin: admin@example.com / admin123
+python create_admin.py
 ```
 
-### 6. Open in Browser
-Go to: http://localhost:5000
-
----
-
-## Installation
-
-### Prerequisites
-- Python 3.7+
-- pip package manager
-
-### Setup Instructions
-
-1. Clone the repository:
-```bash
-git clone https://github.com/SkunkApe-jp/intelligent-stock-prediction-forked.git
-cd intelligent-stock-prediction
-```
-
-2. Create a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Run the application:
+### 5. Run & Explore
 ```bash
 python main.py
-```
-
-5. Access the application at `http://localhost:5000`
-
-### Default Credentials
-- **Admin User**: 
-  - Username: admin
-  - Email: stockpredictorapp@gmail.com
-  - Password: Samplepass@123
-
-## Usage
-
-### For Regular Users
-1. Register a new account or log in with existing credentials
-2. Explore the dashboard to view wallet balance and portfolio holdings
-3. Use the prediction feature to analyze stock trends
-4. Perform simulated buy/sell transactions
-5. Record dividend payouts
-6. Monitor portfolio performance
-
-### For Administrators
-1. Log in with admin credentials
-2. Manage users, companies, and brokers through the admin panel
-3. Configure commission rates
-4. Monitor system statistics and transaction logs
-5. View overall system performance metrics
-
-## Project Structure
-
-```
-intelligent-stock-prediction/
-├── main.py                 # Flask application entry point
-├── news_sentiment.py       # Sentiment analysis implementation
-├── requirements.txt        # Python dependencies
-├── templates/              # HTML templates
-├── static/                 # CSS, JavaScript, and static assets
-├── docs/                   # Documentation and diagrams
-├── tests/                  # Test suite
-├── demos/                  # Demonstration scripts
-├── screenshots/            # Application screenshots
-└── README.md               # This file
+# Access at http://localhost:5000
 ```
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
-
-- [Draft Report](docs/draft-report.md) - Complete project documentation
-- [Diagrams](docs/diagrams/) - System architecture and design diagrams
-- [Advanced Features](docs/ADVANCED_FEATURES.md) - Detailed feature descriptions
-- [Testing Framework](docs/COMPREHENSIVE_TESTING_FRAMEWORK.md) - Testing methodologies
-- [API Keys Guide](docs/API_KEYS_GUIDE.md) - Configuration instructions
-
-## Contributing
-
-This project welcomes contributions and suggestions. Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution.
-
-### How to Contribute
-1. Fork the repository
-2. Create a new branch for your feature
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
-
-For major changes, please open an issue first to discuss what you would like to change.
+Detailed project documentation can be found in the `docs/` and `documents/` directories:
+- **Project Report**: Comprehensive breakdown of methodology, literature review, and results.
+- **Advanced Features**: Detailed guides on the sentiment engine and notification system.
+- **API Keys**: Instructions for configuring optional Alpha Vantage or NewsAPI integrations.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+This project is licensed under the **MIT License**. See the `LICENSE` file for full details.
