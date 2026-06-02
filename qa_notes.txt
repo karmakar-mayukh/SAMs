@@ -1,0 +1,21 @@
+Q: What are REPORT SNAPSHOTS in the admin dashboard context?
+A: ReportSnapshot is a database model storing persisted portfolio performance reports. Each snapshot captures:
+- total_buys / total_sells - Total transaction values
+- total_dividends / total_commissions - Income and fees
+- net_cashflow - Overall cash flow
+- period_days - Time period (e.g., 30 days, 0 for all time)
+- generated_at - Timestamp
+The report_count displays total saved snapshots across all users.
+
+Q: What do these metrics mean in the admin dashboard?
+A: 
+- UPTIME (SEC): Duration in seconds since server last started/restarted
+- TOTAL REQUESTS: Cumulative HTTP requests processed since startup
+- AVG LATENCY (MS): Mean response time in milliseconds across all requests
+- SERVER ERRORS: Count of failed HTTP requests (non-2xx status codes)
+
+Q: Why don't 400s count as server errors?
+A: The code (main.py:420) only counts 5xx errors as server errors:
+  if response.status_code >= 500:
+      REQUEST_METRICS['total_errors'] += 1
+  4xx errors are classified as client errors (malformed requests), not server failures.

@@ -126,238 +126,312 @@
         <div class="diagram-card">
             <h2 class="diagram-title">Level 0 Data Flow Diagram</h2>
             <div class="mermaid">
-                flowchart LR
-                    %% External Entities
-                    User[["User"]]
-                    Admin[["Admin"]]
-                    MarketData[["Market Data APIs"]]
+flowchart LR
+    %% External Entities
+    User[["User"]]
+    Admin[["Admin"]]
+    MarketData[["Market Data APIs"]]
 
-                    %% Processes
-                    P1["P1: Authentication"]
-                    P2["P2: Portfolio Management"]
-                    P3["P3: Prediction Engine"]
-                    P4["P4: Sentiment Analysis"]
-                    P5["P5: Admin Monitoring"]
+    %% Processes
+    P1["P1: Authentication & Profile"]
+    P2["P2: Portfolio & Simulated Trading"]
+    P3["P3: Dual-Mode Prediction Engine"]
+    P4["P4: Multi-Source Sentiment Analysis"]
+    P5["P5: Notification & Reporting"]
+    P6["P6: Admin Governance & Monitoring"]
 
-                    %% Data Stores
-                    DS_User[("D1: User DB")]
-                    DS_Company[("D2: Company DB")]
-                    DS_Portfolio[("D3: Portfolio DB")]
-                    DS_Txn[("D4: Transaction DB")]
-                    DS_Dividend[("D5: Dividend DB")]
+    %% Data Stores
+    DS_User[("D1: User & Preferences")]
+    DS_Company[("D2: Companies & Datasets")]
+    DS_Portfolio[("D3: Portfolio & Invoices")]
+    DS_Txn[("D4: Transactions & Logs")]
 
-                    %% Flows
-                    User -->|Login/Logout| P1
-                    P1 -->|User details| DS_User
-                    P1 -->|Auth result| User
+    %% Flows
+    User -->|Login / Preferences| P1
+    P1 -->|Store / Fetch| DS_User
+    P1 -->|Auth result| User
 
-                    User -->|Trade / Dividend Requests| P2
-                    P2 -->|Portfolio updates| DS_Portfolio
-                    P2 -->|Transactions| DS_Txn
-                    P2 -->|Dividends| DS_Dividend
-                    P2 -->|Dashboard views| User
+    User -->|Trade / Dividend / Report Requests| P2
+    P2 -->|Portfolio & Invoice updates| DS_Portfolio
+    P2 -->|Log transactions| DS_Txn
+    P2 -->|Visualizations| User
 
-                    P2 -->|Symbol & history request| P3
-                    P3 -->|Historical data & predictions| P2
+    P2 -->|Symbol / Catalyst Mode| P3
+    P3 -->|Price & Volume Predictions| P2
 
-                    P3 -->|Price/News requests| MarketData
-                    MarketData -->|Price/News data| P3
+    P3 -->|Price/News requests| MarketData
+    MarketData -->|Price/News data| P3
 
-                    P3 -->|News text| P4
-                    P4 -->|Sentiment scores| P3
+    P3 -->|News aggregator| P4
+    P4 -->|Sentiment polarity| P3
 
-                    Admin -->|Monitoring requests| P5
-                    P5 -->|Aggregated stats| Admin
+    P2 -->|Trigger alerts / snapshots| P5
+    P5 -->|Deliver alerts / PDF / Text| User
+    P5 -->|Store metadata| DS_Portfolio
 
-                    P5 --> DS_User
-                    P5 --> DS_Company
-                    P5 --> DS_Portfolio
-                    P5 --> DS_Txn
-                    P5 --> DS_Dividend
+    Admin -->|Governance / Health Monitoring| P6
+    P6 -->|Dataset uploads / Metrics| Admin
+
+    P6 <--> DS_User
+    P6 <--> DS_Company
+    P6 <--> DS_Portfolio
+    P6 <--> DS_Txn
             </div>
             <div class="diagram-description">
-                <p>This diagram shows the high-level data flow of the system, illustrating how external entities (Users, Admins, and Market Data APIs) interact with the core processes and data stores.</p>
+                <p>High-level data flow of the system, including prediction engine and sentiment analysis integration.</p>
             </div>
         </div>
         
         <div class="diagram-card">
             <h2 class="diagram-title">Portfolio Management DFD (Level 1)</h2>
             <div class="mermaid">
-                flowchart LR
-                    User["User"]
+flowchart LR
+    User["User"]
 
-                    subgraph P2["P2: Portfolio Management (Level 1)"]
-                        P2_1["P2.1: Place Buy Order"]
-                        P2_2["P2.2: Place Sell Order"]
-                        P2_3["P2.3: Record Dividend"]
-                        P2_4["P2.4: View Portfolio & Wallet"]
-                    end
+    subgraph P2["P2: Portfolio Management (Level 1)"]
+        P2_1["P2.1: Place Buy Order"]
+        P2_2["P2.2: Place Sell Order"]
+        P2_3["P2.3: Record Dividend"]
+        P2_4["P2.4: Dashboard & Performance View"]
+        P2_5["P2.5: Generate Invoices & Reports"]
+    end
 
-                    DS_User[(D1: User DB - Wallet)]
-                    DS_Portfolio[(D3: Portfolio DB)]
-                    DS_Txn[(D4: Transaction DB)]
-                    DS_Dividend[(D5: Dividend DB)]
+    DS_User[(D1: User DB - Wallet)]
+    DS_Portfolio[(D3: Portfolio & Invoices)]
+    DS_Txn[(D4: Transactions & Logs)]
 
-                    User -->|"Buy request: symbol & qty"| P2_1
-                    P2_1 -->|"Update wallet & holdings"| DS_User
-                    P2_1 -->|"Insert BUY transaction"| DS_Txn
-                    P2_1 -->|"Updated view"| User
+    %% Trade Flows
+    User -->|"Buy/Sell Request"| P2_1 & P2_2
+    P2_1 & P2_2 -->|"Update Wallet & Holdings"| DS_User & DS_Portfolio
+    P2_1 & P2_2 -->|"Log Transaction"| DS_Txn
+    
+    %% Invoice/Report Trigger
+    P2_1 & P2_2 -->|"Trigger Document Generation"| P2_5
+    P2_5 -->|"Store Invoice/Metadata"| DS_Portfolio
+    P2_5 -->|"PDF/CSV Document"| User
 
-                    User -->|"Sell request: symbol & qty"| P2_2
-                    P2_2 -->|"Update wallet & holdings"| DS_User
-                    P2_2 -->|"Insert SELL transaction"| DS_Txn
-                    P2_2 -->|"Updated view"| User
+    %% Dividend Flows
+    User -->|"Dividend info"| P2_3
+    P2_3 -->|"Increase Wallet"| DS_User
+    P2_3 -->|"Update Holdings & Records"| DS_Portfolio
+    P2_3 -->|"Log Dividend Transaction"| DS_Txn
 
-                    User -->|"Dividend info: symbol & amount"| P2_3
-                    P2_3 -->|"Increase wallet"| DS_User
-                    P2_3 -->|"Insert dividend record"| DS_Dividend
-                    P2_3 -->|"Insert DIVIDEND transaction"| DS_Txn
-
-                    User -->|"Dashboard request"| P2_4
-                    P2_4 -->|"Read wallet"| DS_User
-                    P2_4 -->|"Read holdings"| DS_Portfolio
-                    P2_4 -->|"Read history"| DS_Txn
-                    P2_4 -->|"Dashboard data"| User
+    %% Viewing Flows
+    User -->|"Request Dashboard/Report"| P2_4
+    P2_4 -->|"Fetch Wallet & Holdings"| DS_User & DS_Portfolio
+    P2_4 -->|"Fetch History"| DS_Txn
+    P2_4 -->|"Visualizations & Metrics"| User
             </div>
             <div class="diagram-description">
-                <p>This diagram provides a detailed view of the portfolio management process, showing how buy orders, sell orders, dividend recording, and portfolio viewing are handled within the system.</p>
+                <p>Detailed view of portfolio management process, including transaction handling, dividend recording, and automated generation of invoices and performance reports.</p>
             </div>
         </div>
         
         <div class="diagram-card">
             <h2 class="diagram-title">Entity Relationship Diagram</h2>
             <div class="mermaid">
-                erDiagram
-                    USER {
-                        int id
-                        string email
-                        string username
-                        string password_hash
-                        string role
-                        decimal wallet_balance
-                        datetime created_at
-                        datetime last_login_at
-                        bool is_active
-                    }
+erDiagram
+    USER {
+        int id
+        string email
+        string username
+        string password_hash
+        string role
+        decimal wallet_balance
+        datetime created_at
+        datetime last_login_at
+        bool is_active
+    }
 
-                    COMPANY {
-                        int id
-                        string symbol
-                        string name
-                        bool is_active
-                    }
+    COMPANY {
+        int id
+        string symbol
+        string name
+        string exchange
+        string sector
+        bool is_active
+    }
 
-                    BROKER {
-                        int id
-                        string name
-                        decimal commission_rate
-                        bool is_active
-                    }
+    BROKER {
+        int id
+        string name
+        string email
+        decimal commission_rate
+        bool is_active
+    }
 
-                    PORTFOLIO_ITEM {
-                        int id
-                        int user_id
-                        int company_id
-                        int quantity
-                        decimal average_buy_price
-                    }
+    PORTFOLIO_ITEM {
+        int id
+        int user_id
+        int company_id
+        int quantity
+        decimal average_buy_price
+        datetime created_at
+    }
 
-                    TRANSACTION {
-                        int id
-                        int user_id
-                        int company_id
-                        int broker_id
-                        string txn_type
-                        int quantity
-                        decimal price
-                        decimal total_amount
-                        decimal commission_amount
-                        datetime created_at
-                        string description
-                    }
+    TRANSACTION {
+        int id
+        int user_id
+        int company_id
+        int broker_id
+        string txn_type
+        int quantity
+        decimal price
+        decimal total_amount
+        decimal commission_amount
+        datetime created_at
+        string description
+    }
 
-                    DIVIDEND {
-                        int id
-                        int user_id
-                        int company_id
-                        decimal amount
-                        datetime created_at
-                    }
+    DIVIDEND {
+        int id
+        int portfolio_item_id
+        decimal amount_per_share
+        decimal total_amount
+        date payable_date
+        datetime created_at
+    }
 
-                    USER ||--o{ PORTFOLIO_ITEM : "owns"
-                    COMPANY ||--o{ PORTFOLIO_ITEM : "is held in"
+    NOTIFICATION_PREFERENCE {
+        int id
+        int user_id
+        bool in_app_enabled
+        bool trade_notifications
+        bool report_notifications
+        bool invoice_notifications
+        datetime created_at
+        datetime updated_at
+    }
 
-                    USER ||--o{ TRANSACTION : "executes"
-                    COMPANY ||--o{ TRANSACTION : "is traded in"
-                    BROKER ||--o{ TRANSACTION : "charges commission on"
+    USER_NOTIFICATION {
+        int id
+        int user_id
+        string category
+        string title
+        string message
+        bool is_read
+        datetime created_at
+    }
 
-                    USER ||--o{ DIVIDEND : "receives"
-                    COMPANY ||--o{ DIVIDEND : "issues"
+    REPORT_SNAPSHOT {
+        int id
+        int user_id
+        int period_days
+        decimal total_buys
+        decimal total_sells
+        decimal total_dividends
+        decimal total_commissions
+        decimal net_cashflow
+        datetime generated_at
+    }
+
+    INVOICE {
+        int id
+        string invoice_number
+        int user_id
+        int transaction_id
+        string transaction_type
+        string direction
+        decimal subtotal
+        decimal commission
+        decimal net_amount
+        string status
+        datetime created_at
+    }
+
+    USER ||--o{ PORTFOLIO_ITEM : "owns"
+    COMPANY ||--o{ PORTFOLIO_ITEM : "is held in"
+
+    USER ||--o{ TRANSACTION : "executes"
+    COMPANY ||--o{ TRANSACTION : "is traded in"
+    BROKER ||--o{ TRANSACTION : "charges commission on"
+
+    PORTFOLIO_ITEM ||--o{ DIVIDEND : "accrues"
+
+    USER ||--o| NOTIFICATION_PREFERENCE : "configures"
+    USER ||--o{ USER_NOTIFICATION : "receives"
+    USER ||--o{ REPORT_SNAPSHOT : "generates"
+    USER ||--o{ INVOICE : "is billed with"
+    TRANSACTION ||--o| INVOICE : "generates"
             </div>
             <div class="diagram-description">
-                <p>This entity relationship diagram shows the database schema of the system, including all tables and their relationships. It illustrates how users, companies, brokers, portfolio items, transactions, and dividends are connected.</p>
+                <p>Database schema and relationships including notification preferences, invoices, and reports.</p>
             </div>
         </div>
         
         <div class="diagram-card">
             <h2 class="diagram-title">Use Case Diagram</h2>
             <div class="mermaid">
-                flowchart TB
-                    actorUser(["User"])
-                    actorAdmin(["Admin"])
+flowchart TB
+    %% Actors
+    User[["User"]]
+    Admin[["Admin"]]
 
-                    subgraph System["Share Market Management and Prediction System"]
-                        UC_Login[["Login / Register"]]
-                        UC_ViewDashboard[["View Dashboard & Holdings"]]
-                        UC_Trade[["Perform Buy/Sell Trades"]]
-                        UC_Dividend[["Record Dividends"]]
-                        UC_ViewPrediction[["View Price Prediction & Sentiment"]]
-                        UC_ManageCompanies[["Manage Companies"]]
-                        UC_ManageBrokers[["Manage Brokers & Commissions"]]
-                        UC_Monitor[["Monitor Transactions & Statistics"]]
-                    end
+    %% System Functions
+    subgraph System["Share Market Management and Prediction System"]
+        UC_Login[["Login / Register"]]
+        UC_ViewDashboard[["View Dashboard & Holdings"]]
+        UC_Trade[["Perform Buy/Sell Trades"]]
+        UC_Invoice[["Download Transaction Invoices"]]
+        UC_Dividend[["Record Dividends"]]
+        UC_Notifications[["Manage Notification Preferences"]]
+        UC_Reports[["Generate Portfolio Snapshots"]]
+        UC_ViewPrediction[["View Price Prediction & Sentiment"]]
+        UC_DatasetManage[["Manage Prediction Datasets"]]
+        UC_ManageCompanies[["Manage Companies"]]
+        UC_ManageBrokers[["Manage Brokers & Commissions"]]
+        UC_Monitor[["Monitor System Health & Logs"]]
+    end
 
-                    actorUser --> UC_Login
-                    actorUser --> UC_ViewDashboard
-                    actorUser --> UC_Trade
-                    actorUser --> UC_Dividend
-                    actorUser --> UC_ViewPrediction
+    %% Relationships
+    User --> UC_Login
+    User --> UC_ViewDashboard
+    User --> UC_Trade
+    User --> UC_Invoice
+    User --> UC_Dividend
+    User --> UC_Notifications
+    User --> UC_Reports
+    User --> UC_ViewPrediction
 
-                    actorAdmin --> UC_Login
-                    actorAdmin --> UC_ManageCompanies
-                    actorAdmin --> UC_ManageBrokers
-                    actorAdmin --> UC_Monitor
+    Admin --> UC_Login
+    Admin --> UC_ManageCompanies
+    Admin --> UC_ManageBrokers
+    Admin --> UC_Monitor
+    Admin --> UC_DatasetManage
             </div>
             <div class="diagram-description">
-                <p>This use case diagram illustrates the functional requirements of the system from the perspective of users and administrators, showing what actions each role can perform.</p>
+                <p>Functional requirements by user role, including admin governance and advanced user features.</p>
             </div>
         </div>
         
         <div class="diagram-card">
             <h2 class="diagram-title">Project Gantt Chart</h2>
             <div class="mermaid">
-                gantt
-                    dateFormat  YYYY-MM-DD
-                    title Project Plan - Share Market Management and Prediction System
+gantt
+    dateFormat  YYYY-MM-DD
+    title Project Timeline - Share Market Management and Prediction System (2025-2026)
 
-                    section Requirements & Review
-                    Requirements Gathering        :done,    reqs, 2025-01-01, 2025-01-14
-                    Literature & Tech Selection   :done,    lit,  2025-01-15, 2025-01-28
+    section Phase 1: Foundation
+    Requirements & Tech Selection :done, reqs, 2025-11-01, 2025-11-20
+    Database & Auth System        :done, auth, 2025-11-21, 2025-12-10
+    Core Portfolio Engine         :done, core, 2025-12-11, 2025-12-31
 
-                    section Design
-                    SRS and High-Level Design     :active,  design1, 2025-01-29, 2025-02-11
-                    DB & Diagram Design           :         design2, 2025-02-12, 2025-02-25
+    section Phase 2: Implementation
+    Prediction Module (ML)        :done, impl1, 2026-01-01, 2026-01-25
+    Sentiment Analysis Engine     :done, impl2, 2026-01-26, 2026-02-15
+    Dividend & Broker Management  :done, impl3, 2026-02-16, 2026-03-05
 
-                    section Implementation
-                    Prediction Module             :         impl1, 2025-02-26, 2025-03-18
-                    Management Dashboard & Trades :         impl2, 2025-03-19, 2025-04-09
+    section Phase 3: Advanced Features
+    Admin Dashboard & Analytics   :done, feat1, 2026-03-06, 2026-03-20
+    Notifications & Reporting     :done, feat2, 2026-03-21, 2026-03-31
+    System Hardening & Security   :done, feat3, 2026-04-01, 2026-04-05
 
-                    section Testing & Documentation
-                    Testing & Validation          :         test,  2025-04-10, 2025-04-23
-                    Report & Presentation         :         doc,   2025-04-24, 2025-05-07
+    section Phase 4: Finalization
+    Testing & Validation          :done, test, 2026-04-06, 2026-04-07
+    Final Documentation & Delivery :done, doc, 2026-04-08, 2026-04-09
             </div>
             <div class="diagram-description">
-                <p>This Gantt chart shows the project timeline, illustrating the various phases of development from requirements gathering through implementation and testing.</p>
+                <p>Project timeline and phases spanning 2025-2026.</p>
             </div>
         </div>
     </main>

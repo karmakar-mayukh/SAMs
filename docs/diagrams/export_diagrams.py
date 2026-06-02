@@ -123,50 +123,52 @@ def export_with_mermaid_cli(mermaid_code, output_name, output_dir):
 def export_with_api(mermaid_code, output_name, output_dir):
     """Export diagram using Mermaid Live Editor API."""
     try:
-        # Prepare the request
-        config = create_mermaid_config()
-        payload = {
-            "code": mermaid_code,
-            "mermaid": config,
-            "options": {
-                "width": 1600,
-                "height": 900
-            }
-        }
+        # Base64 encode the mermaid code
+        # Use simple code encoding for the URL
+        encoded_code = base64.b64encode(mermaid_code.encode('utf-8')).decode('utf-8')
         
         print(f"Attempting API export for {output_name}...")
         
+        # Parameters for the API
+        params = {
+            "theme": "neutral",
+            "width": 1600,
+            "height": 900
+        }
+        
         # Export to SVG
-        svg_response = requests.post(
-            "https://mermaid.ink/svg",
-            json=payload,
+        svg_url = f"https://mermaid.ink/svg/{encoded_code}"
+        svg_response = requests.get(
+            svg_url,
+            params=params,
             timeout=30
         )
         
         if svg_response.status_code == 200:
-            svg_file = os.path.join(output_dir, f"{output_name}.svg")
+            svg_file = os.path.abspath(os.path.join(output_dir, f"{output_name}.svg"))
             with open(svg_file, 'wb') as f:
                 f.write(svg_response.content)
-            print(f"Successfully exported {output_name}.svg")
+            print(f"Successfully exported {output_name}.svg to {svg_file}")
         else:
             print(f"Failed to export {output_name}.svg - HTTP {svg_response.status_code}")
         
         # Export to PNG
-        png_response = requests.post(
-            "https://mermaid.ink/img",
-            json=payload,
+        png_url = f"https://mermaid.ink/img/{encoded_code}"
+        png_response = requests.get(
+            png_url,
+            params=params,
             timeout=30
         )
         
         if png_response.status_code == 200:
-            png_file = os.path.join(output_dir, f"{output_name}.png")
+            png_file = os.path.abspath(os.path.join(output_dir, f"{output_name}.png"))
             with open(png_file, 'wb') as f:
                 f.write(png_response.content)
-            print(f"Successfully exported {output_name}.png")
+            print(f"Successfully exported {output_name}.png to {png_file}")
         else:
             print(f"Failed to export {output_name}.png - HTTP {png_response.status_code}")
             
-        return True
+        return svg_response.status_code == 200 or png_response.status_code == 200
     except requests.exceptions.Timeout:
         print(f"API export timed out for {output_name}")
         return False
