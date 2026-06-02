@@ -44,35 +44,35 @@ jobs:
       run: |
         python -m nltk.downloader vader_lexicon
     
-    - name: Run Phase 1: Database Models Tests
+    - name: "Run Phase 1: Database Models Tests"
       run: |
         pytest tests/test_database_models.py -v --tb=short
     
-    - name: Run Phase 2: Authentication Tests
+    - name: "Run Phase 2: Authentication Tests"
       run: |
         pytest tests/test_authentication.py -v --tb=short
     
-    - name: Run Phase 3: Portfolio Management Tests
+    - name: "Run Phase 3: Portfolio Management Tests"
       run: |
         pytest tests/test_portfolio_management.py -v --tb=short
     
-    - name: Run Phase 4: Trading Operations Tests
+    - name: "Run Phase 4: Trading Operations Tests"
       run: |
         pytest tests/test_trading_operations.py -v --tb=short
     
-    - name: Run Phase 5-7: ML Model Tests
+    - name: "Run Phase 5-7: ML Model Tests"
       run: |
         pytest tests/test_lstm_model.py tests/test_arima_model.py tests/test_linear_regression_model.py -v --tb=short -m "not slow"
     
-    - name: Run Phase 8: Sentiment Analysis Tests
+    - name: "Run Phase 8: Sentiment Analysis Tests"
       run: |
         pytest tests/test_sentiment_sources.py -v --tb=short
     
-    - name: Run Phase 9-10: Integration Tests
+    - name: "Run Phase 9-10: Integration Tests"
       run: |
         pytest tests/test_prediction_pipeline.py tests/test_web_routes.py -v --tb=short
     
-    - name: Run Phase 11-15: E2E, API, Performance, Security, Deployment
+    - name: "Run Phase 11-15: E2E, API, Performance, Security, Deployment"
       run: |
         pytest tests/test_e2e_api_perf_security_deployment.py -v --tb=short -m "not slow"
     
@@ -130,4 +130,5 @@ jobs:
         black --check . || echo "Black formatting check completed"
     
     - name: Check import sorting
-      run: |isort --check-only . || echo "Import sorting check completed"
+      run: |
+        isort --check-only . || echo "Import sorting check completed"
