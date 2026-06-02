@@ -6,7 +6,7 @@ Tests for user registration, login, logout, and role-based access control.
 
 import pytest
 from flask import session
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from main import db, User
 

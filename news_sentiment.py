@@ -32,6 +32,8 @@ import hashlib
 from typing import List, Dict, Optional, Union
 import logging
 import os
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +49,7 @@ except ImportError:
 
 # Redis disabled - optional caching not needed
 REDIS_AVAILABLE = False
+redis = None
 
 # FinVADER disabled (buggy library)
 FINVADER_AVAILABLE = False
@@ -66,6 +69,14 @@ except ImportError:
 
 # Import for data persistence
 import pickle
+
+
+def finvader(text, *args, **kwargs):
+    """Fallback finvader shim when FinVADER library is unavailable."""
+    indicator = kwargs.get("indicator")
+    if indicator == "compound":
+        return 0.0
+    return {"compound": 0.0, "pos": 0.0, "neu": 1.0, "neg": 0.0}
 
 # Download required NLTK data
 required_nltk_data = {
