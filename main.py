@@ -1138,38 +1138,46 @@ def predict():
     #**************** FUNCTIONS TO FETCH DATA ***************************
     def get_historical(quote):
         import time, os
-        quote = quote.upper()
-        filename = f'{quote}.csv'
-        
-        # 1. Reuse local data if it's up-to-date (updated today)
+        # 1. Check for local file first (case-insensitive)
+        filename = f"{quote}.csv"
+        alt_filename = f"{quote.upper()}.csv"
+        actual_filename = None
+
         if os.path.exists(filename):
+            actual_filename = filename
+        elif os.path.exists(alt_filename):
+            actual_filename = alt_filename
+            filename = alt_filename # Use the uppercase version for consistency if found
+
+        if actual_filename:
             try:
-                df_temp = pd.read_csv(filename)
+                df_temp = pd.read_csv(actual_filename)
                 if not df_temp.empty and 'Date' in df_temp.columns:
                     last_date = pd.to_datetime(df_temp['Date'].iloc[-1]).date()
                     if last_date >= datetime.now().date():
                         print(f"DEBUG: Reusing local up-to-date data for {quote}")
                         return
-                    # If file exists but is old, we'll proceed to update it
-                    print(f"DEBUG: Local data for {quote} is outdated (Last date: {last_date}). Updating...")
+                    # If file exists but is old, we'll proceed to attempt update
+                    print(f"DEBUG: Local data for {quote} is outdated (Last date: {last_date}). Attempting update...")
             except Exception as e:
-                print(f"DEBUG: Local file check failed, downloading fresh: {e}")
+                print(f"DEBUG: Local file check failed, will try downloading: {e}")
 
+        # 2. Try online sources if no up-to-date local file
         end = datetime.now()
         start = datetime(end.year-2, end.month, end.day)
         
-        # 2. Try yfinance with multiple attempts
+        # Try yfinance
         data = pd.DataFrame()
-        for attempt in range(3):
+        quote_for_yf = quote.upper()
+        for attempt in range(2): # Reduced attempts for speed
             try:
-                # Removed custom session as it caused issues with curl_cffi in this environment
-                data = yf.download(quote, start=start, end=end, progress=False)
+                data = yf.download(quote_for_yf, start=start, end=end, progress=False)
                 if not data.empty:
                     break
-                time.sleep(1)
+                time.sleep(0.5)
             except Exception as e:
                 print(f"yfinance attempt {attempt+1} failed for {quote}: {e}")
-                time.sleep(1)
+                time.sleep(0.5)
 
         # 3. Process and Save yfinance data
         if not data.empty:
@@ -1180,16 +1188,15 @@ def predict():
             df.to_csv(filename, index=False)
             return
 
-        # 4. Fallback to Alpha Vantage (Global symbols)
+        # 4. Fallback to Alpha Vantage
         print(f"yfinance failed for {quote}, falling back to Alpha Vantage...")
         try:
             ts = TimeSeries(key='N6A6QT6IBFJOPJ70', output_format='pandas')
-            # Use get_daily instead of get_daily_adjusted as the latter is often premium
             try:
-                data, meta_data = ts.get_daily(symbol=quote, outputsize='full')
+                data, meta_data = ts.get_daily(symbol=quote_for_yf, outputsize='full')
             except Exception as e:
                 print(f"Direct Alpha Vantage lookup failed: {e}. Trying NSE fallback...")
-                data, meta_data = ts.get_daily(symbol='NSE:'+quote, outputsize='full')
+                data, meta_data = ts.get_daily(symbol='NSE:'+quote_for_yf, outputsize='full')
             
             data = data.head(503).iloc[::-1]
             data = data.reset_index()
@@ -1199,14 +1206,17 @@ def predict():
             df['High'] = data['2. high']
             df['Low'] = data['3. low']
             df['Close'] = data['4. close']
-            # Map Close to Adj Close for consistency since non-adjusted doesn't have it
             df['Adj Close'] = data['4. close']
             df['Volume'] = data['5. volume']
             df.to_csv(filename, index=False)
+            return
         except Exception as e:
             print(f"Global lookup failed for {quote}: {e}")
+            # FINAL FALLBACK: If we have ANY local file, use it even if outdated
+            if actual_filename:
+                print(f"DEBUG: All updates failed. Falling back to existing local file: {actual_filename}")
+                return
             raise Exception(f"Could not fetch data for {quote} from any source.")
-        return
 
     #******************** ARIMA SECTION ********************
     def ARIMA_ALGO(df):
